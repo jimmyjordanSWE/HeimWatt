@@ -21,20 +21,20 @@ typedef struct data_store data_store;
  * ============================================================ */
 
 /**
- * Open data store.
+ * Create data store.
  *
  * @param ds      Output pointer for data store
  * @param db_path Path to database file
  * @return 0 on success, -1 on error
  */
-int data_store_open(data_store** ds, const char* db_path);
+int data_store_create(data_store** ds, const char* db_path);
 
 /**
- * Close data store.
+ * Destroy data store.
  *
  * @param ds Pointer to data store (set to NULL on return)
  */
-void data_store_close(data_store** ds);
+void data_store_destroy(data_store** ds);
 
 /* ============================================================
  * TIER 1: KNOWN SEMANTIC TYPES

@@ -68,11 +68,11 @@ int ipc_conn_recv(ipc_conn* conn, char** msg, size_t* len);
 int ipc_conn_send(ipc_conn* conn, const char* msg, size_t len);
 
 /**
- * Close a connection.
+ * Destroy connection and free resources.
  *
  * @param conn Pointer to connection (set to NULL on return)
  */
-void ipc_conn_close(ipc_conn** conn);
+void ipc_conn_destroy(ipc_conn** conn);
 
 /* ============================================================
  * CONNECTION IDENTIFICATION

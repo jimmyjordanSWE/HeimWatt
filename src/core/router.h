@@ -68,7 +68,7 @@ int router_unregister(router* r, const char* plugin_id);
  * @param path   URL path
  * @return Plugin ID or NULL if not found
  */
-const char* router_lookup(router* r, const char* method, const char* path);
+const char* router_lookup(const router* r, const char* method, const char* path);
 
 /**
  * Check if a route exists.
@@ -78,7 +78,7 @@ const char* router_lookup(router* r, const char* method, const char* path);
  * @param path   URL path
  * @return true if route exists
  */
-bool router_has_route(router* r, const char* method, const char* path);
+bool router_has_route(const router* r, const char* method, const char* path);
 
 /* ============================================================
  * DEBUG

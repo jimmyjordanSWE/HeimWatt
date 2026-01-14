@@ -1,125 +1,56 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include "db.h"
-#include "types.h"
+#include <stdbool.h>
 
 /* ========================================================================
  * Lifecycle Functions
  * ======================================================================== */
 
 /**
- * @brief Create a new server context.
- * Allocates and zero-initializes the context structure.
- * @return Pointer to context on success, NULL on allocation failure.
+ * @brief Opaque HeimWatt context.
+ * Defines the application instance.
  */
-server_ctx* server_create(void);
+typedef struct heimwatt_ctx heimwatt_ctx;
 
 /**
- * @brief Destroy server context and free memory.
- * Calls server_fini() if needed, then frees the context.
- * @param ctx_ptr Pointer to context pointer (set to NULL after free).
+ * @brief Create a new HeimWatt context.
+ * @return Pointer to context on success, NULL on failure.
  */
-void server_destroy(server_ctx** ctx_ptr);
+heimwatt_ctx* heimwatt_create(void);
 
 /**
- * @brief Initialize the server context.
- * Sets up sockets, database connection, and synchronization primitives.
+ * @brief Initialize the system.
+ * Loads config, connects to DB, starts IPC.
  * @param ctx Context to initialize.
+ * @param config_path Path to configuration JSON (optional).
  * @return 0 on success, -1 on failure.
  */
-int server_init(server_ctx* ctx);
+int heimwatt_init(heimwatt_ctx* ctx, const char* config_path);
 
 /**
- * @brief Run the main server loop.
- * Blocks until shutdown is requested.
- * @param ctx Initialized server context.
+ * @brief Run the main loop.
+ * Blocks until shutdown.
+ * Starts plugins, HTTP server, etc.
+ * @param ctx Initialized context.
  */
-void server_run(server_ctx* ctx);
+void heimwatt_run(heimwatt_ctx* ctx);
 
 /**
- * @brief Finalize and cleanup server resources.
- * Closes sockets, DB, and destroys mutexes.
- * @param ctx Context to cleanup.
+ * @brief Request shutdown.
+ * Unblocks heimwatt_run().
  */
-void server_fini(server_ctx* ctx);
+void heimwatt_request_shutdown(heimwatt_ctx* ctx);
 
 /**
- * @brief Update the shared weather state.
- * Thread-safe.
- * @param ctx Server context.
- * @param w New weather data.
+ * @brief Destroy context.
+ * @param ctx_ptr Pointer to context pointer.
  */
-void server_update_weather(server_ctx* ctx, const weather_data* w);
+void heimwatt_destroy(heimwatt_ctx** ctx_ptr);
 
 /**
- * @brief Update the shared price state and forecast.
- * Thread-safe.
- * @param ctx Server context.
- * @param p Current spot price.
- * @param forecast_24h Optional 24h price forecast array (can be NULL).
+ * @brief Check if system is running.
  */
-void server_update_price(server_ctx* ctx, const spot_price* p, const float* forecast_24h);
-
-/**
- * @brief Update the shared energy plan.
- * Thread-safe.
- * @param ctx Server context.
- * @param plan New energy plan.
- */
-void server_update_plan(server_ctx* ctx, const energy_plan* plan);
-
-/**
- * @brief Set the next scheduled fetch times.
- * Thread-safe.
- * @param ctx Server context.
- * @param next_weather Timestamp for next weather fetch.
- * @param next_price Timestamp for next price fetch.
- */
-void server_set_next_fetch(server_ctx* ctx, time_t next_weather, time_t next_price);
-
-// Accessors (for pipeline)
-
-/**
- * @brief Check if server is running.
- * @param ctx Server context.
- * @return true if running, false if shutdown requested.
- */
-bool server_is_running(const server_ctx* ctx);
-
-/**
- * @return Pointer to database handle.
- */
-db_handle* server_get_db(server_ctx* ctx);
-
-/**
- * @brief Get the configuration object.
- * @param ctx Server context.
- * @return Pointer to read-only config.
- */
-const config* server_get_config(server_ctx* ctx);
-
-/**
- * @brief Get mutable configuration object.
- * Used during initialization to set config values.
- * @param ctx Server context.
- * @return Pointer to mutable config.
- */
-config* server_get_config_mutable(server_ctx* ctx);
-
-/**
- * @brief Get pipeline thread handle.
- * Used by main to create/join pipeline thread.
- * @param ctx Server context.
- * @return Pointer to pthread_t.
- */
-pthread_t* server_get_pipeline_thread(server_ctx* ctx);
-
-/**
- * @brief Set server running state.
- * @param ctx Server context.
- * @param running New running state.
- */
-void server_set_running(server_ctx* ctx, bool running);
+bool heimwatt_is_running(const heimwatt_ctx* ctx);
 
 #endif  // SERVER_H

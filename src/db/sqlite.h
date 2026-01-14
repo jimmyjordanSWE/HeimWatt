@@ -33,20 +33,20 @@ typedef struct db_stmt db_stmt;
  * ============================================================ */
 
 /**
- * Open database (creates if not exists).
+ * Create database connection (creates if not exists).
  *
  * @param conn Output pointer for connection
  * @param path Path to database file
  * @return DB_OK on success, DB_ERROR on failure
  */
-int db_open(db_conn** conn, const char* path);
+int db_create(db_conn** conn, const char* path);
 
 /**
- * Close database.
+ * Destroy database connection.
  *
  * @param conn Pointer to connection (set to NULL on return)
  */
-void db_close(db_conn** conn);
+void db_destroy(db_conn** conn);
 
 /**
  * Execute SQL without result (for DDL, inserts).

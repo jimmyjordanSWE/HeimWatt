@@ -20,12 +20,12 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Sources
-SRC = src/main.c src/utils.c src/config.c src/db.c src/pipeline.c src/server.c src/lps.c
+SRC = src/main.c plugins/out/lps/lps.c src/core/semantic_types.c
 # Convert src/%.c to build/obj/src/%.o
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
 
 # Libs Sources
-LIBS_SRC = libs/cJSON.c libs/sqlite3.c
+LIBS_SRC = libs/cJSON.c libs/sqlite3.c libs/log.c
 # Convert libs/%.c to build/obj/libs/%.o
 LIBS_OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIBS_SRC))
 
@@ -109,7 +109,13 @@ $(TARGET_BIN): $(ALL_OBJ) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Main Sources
-$(OBJ_DIR)/src/%.o: src/%.c | $(OBJ_DIR)/src
+$(OBJ_DIR)/src/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Plugins
+$(OBJ_DIR)/plugins/%.o: plugins/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Libs (Always compiled with safe flags)
@@ -118,7 +124,7 @@ $(OBJ_DIR)/libs/%.o: libs/%.c | $(OBJ_DIR)/libs
 
 # --- Testing ---
 
-$(TEST_BIN): tests/test_lps.c $(OBJ_DIR)/src/lps.o | $(BIN_DIR)
+$(TEST_BIN): tests/test_lps.c $(OBJ_DIR)/plugins/out/lps/lps.o | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -lm
 
 test: CFLAGS = $(CFLAGS_DEBUG)

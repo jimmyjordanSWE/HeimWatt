@@ -1,9 +1,10 @@
 #ifndef DB_H
 #define DB_H
 
+#include <stdint.h>
 #include <time.h>
 
-#include "types.h"
+#include "semantic_types.h"
 
 /**
  * @brief Opaque database handle.
@@ -11,71 +12,65 @@
 typedef struct db_handle db_handle;
 
 /**
- * @brief Open database (creates if not exists).
+ * @brief Create and open database (creates if not exists).
  *
  * @param db   Output pointer for handle
  * @param path Path to database file
  * @return 0 on success, negative errno on failure.
  */
-int db_open(db_handle** db, const char* path);
+int db_create(db_handle** db, const char* path);
 
 /**
- * @brief Close database.
+ * @brief Destroy database handle and close connection.
  *
  * @param db Pointer to handle (set to NULL on return)
  */
-void db_close(db_handle** db);
+void db_destroy(db_handle** db);
 
 /**
- * @brief Initialize database tables.
- * Creates necessary tables if they do not exist.
+ * @brief Initialize database tables (schema migration).
  * @param db Database handle.
  * @return 0 on success, negative errno on failure.
  */
 int db_init_tables(db_handle* db);
 
-/**
- * @brief Insert weather data into the log.
- * @param db Database handle.
- * @param w Weather data to insert.
- * @return 0 on success, negative errno on failure.
- */
-int db_insert_weather(db_handle* db, const weather_data* w);
+/* ============================================================================
+ * Tier 1: Known Semantic Types (Fast, Indexable)
+ * ============================================================================ */
 
 /**
- * @brief Insert spot price data into the log.
- * @param db Database handle.
- * @param p Spot price data to insert.
- * @return 0 on success, negative errno on failure.
+ * @brief Insert a Tier 1 data point.
+ * @param db        Database handle.
+ * @param type      Semantic type ID.
+ * @param timestamp Unix timestamp.
+ * @param value     Numeric value (canonical unit).
+ * @param currency  ISO 4217 currency code (optional, can be NULL).
+ * @param source_id Plugin ID source.
  */
-int db_insert_price(db_handle* db, const spot_price* p);
+int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double value,
+                    const char* currency, const char* source_id);
 
 /**
- * @brief Count rows in a table.
- * @param db Database handle.
- * @param table Table name.
- * @return Number of rows, or 0 on error (logs error).
+ * @brief Query recent Tier 1 data.
+ * @return 0 found, -1 not found.
  */
-int db_count_rows(db_handle* db, const char* table);
+int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val, int64_t* out_ts);
+
+/* ============================================================================
+ * Tier 2: Raw Extension Data (Flexible / Logs)
+ * ============================================================================ */
 
 /**
- * @brief Query table data with pagination.
- * @param db Database handle.
- * @param table Table name.
- * @param limit Maximum number of rows to return.
- * @param offset Row offset.
- * @return JSON string of results (caller must free), or NULL on error.
+ * @brief Insert a Tier 2 raw data point.
+ * @param key Dot-separated key (e.g. "com.vendor.sensor1.temp").
  */
-char* db_query_table(db_handle* db, const char* table, int limit, int offset);
+int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp, const char* json_payload,
+                    const char* source_id);
 
 /**
- * @brief Retrieve historical price and solar data.
- * @param db Database handle.
- * @param start_ts Start timestamp.
- * @param hours Number of hours to retrieve.
- * @param out_prices Output array for prices (must be size `hours`).
- * @param out_solar Output array for solar (must be size `hours`), can be NULL.
+ * @brief Query recent Tier 2 data.
+ * @param out_json Pointer to char* (caller must free).
  */
-void db_get_history(db_handle* db, time_t start_ts, int hours, float* out_prices, float* out_solar);
+int db_query_latest_tier2(db_handle* db, const char* key, char** out_json, int64_t* out_ts);
 
 #endif /* DB_H */

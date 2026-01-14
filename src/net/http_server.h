@@ -27,13 +27,13 @@ typedef int (*http_handler_fn)(const http_request* req, http_response* resp, voi
  * ============================================================ */
 
 /**
- * Initialize HTTP server.
+ * Create and initialize HTTP server.
  *
  * @param srv  Output pointer for server
  * @param port Port to listen on
  * @return 0 on success, -1 on error
  */
-int http_server_init(http_server** srv, int port);
+int http_server_create(http_server** srv, int port);
 
 /**
  * Destroy HTTP server.

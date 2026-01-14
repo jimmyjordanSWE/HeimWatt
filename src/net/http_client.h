@@ -18,12 +18,12 @@ typedef struct http_client http_client;
  * ============================================================ */
 
 /**
- * Initialize HTTP client.
+ * Create and initialize HTTP client.
  *
  * @param client Output pointer for client
  * @return 0 on success, -1 on error
  */
-int http_client_init(http_client** client);
+int http_client_create(http_client** client);
 
 /**
  * Destroy HTTP client.

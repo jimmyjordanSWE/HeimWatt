@@ -62,7 +62,7 @@ void sdk_destroy(plugin_ctx** ctx_ptr);
 /**
  * Log a message to the centralized Core log.
  */
-void sdk_log(plugin_ctx* ctx, sdk_log_level level, const char* fmt, ...);
+void sdk_log(const plugin_ctx* ctx, sdk_log_level level, const char* fmt, ...);
 
 // ============================================================================
 // Data Reporting API (Inbound / Data Plugins)

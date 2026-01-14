@@ -10,7 +10,7 @@
 // --- Contexts ---
 // Moved from types.h to enforce Opaque Pointer pattern
 struct server_ctx {
-    config cfg;                                 // Server configuration
+    config* cfg;                                // Server configuration (opaque)
     pthread_t pipeline_thread;                  // Data fetching thread
     volatile bool running;                      // Server run status
     int server_sock_fd;                         // Listening socket

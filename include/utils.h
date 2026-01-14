@@ -40,13 +40,7 @@
     } while (0)
 
 // --- Logging ---
-
-/**
- * @brief Log a message with timestamp and level.
- * @param level Log severity.
- * @param fmt Format string.
- */
-void log_msg(log_level level, const char* fmt, ...);
+#include "log.h"
 
 // --- Time Helpers ---
 

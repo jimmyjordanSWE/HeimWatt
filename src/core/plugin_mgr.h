@@ -47,11 +47,11 @@ typedef enum {
 int plugin_mgr_init(plugin_mgr** mgr, const char* plugins_dir, const char* ipc_sock);
 
 /**
- * Finalize plugin manager and free resources.
+ * Destroy plugin manager and free resources.
  *
  * @param mgr Pointer to manager (set to NULL on return)
  */
-void plugin_mgr_fini(plugin_mgr** mgr);
+void plugin_mgr_destroy(plugin_mgr** mgr);
 
 /* ============================================================
  * DISCOVERY & LOADING
