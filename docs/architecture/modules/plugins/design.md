@@ -73,35 +73,7 @@ Fetch data from external APIs, sensors, or hardware. Report to Core.
 
 ### Example: SMHI Weather Plugin
 
-```c
-#include <heimwatt_sdk.h>
-
-int main(int argc, char **argv) {
-    plugin_ctx *ctx;
-    sdk_init(&ctx, argc, argv);
-    
-    // Register for scheduled triggers
-    // (schedule defined in manifest.json)
-    
-    sdk_run(ctx);  // Blocks, receives TRIGGER messages
-    
-    sdk_fini(&ctx);
-    return 0;
-}
-
-// Called when TRIGGER received
-void on_trigger(plugin_ctx *ctx) {
-    // Fetch from SMHI API...
-    double temp_c = fetch_smhi_temperature();
-    
-    sdk_metric_new(ctx)
-        ->semantic(SEM_ATMOSPHERE_TEMPERATURE)
-        ->value(temp_c)
-        ->floor(-50.0)
-        ->cap(60.0)
-        ->report();
-}
-```
+> **See [Plugin Development Tutorial](../../../../tutorials/plugins.md) for implementation examples.**
 
 ### Manifest
 
@@ -154,57 +126,7 @@ Query data from Core, perform calculations, serve results via HTTP endpoints.
 
 ### Example: Energy Strategy Plugin
 
-```c
-#include <heimwatt_sdk.h>
-#include "lps.h"
-
-static int handle_strategy(plugin_ctx *ctx, const sdk_request *req, 
-                           sdk_response *resp);
-
-int main(int argc, char **argv) {
-    plugin_ctx *ctx;
-    sdk_init(&ctx, argc, argv);
-    
-    // Declare dependencies
-    sdk_require_semantic(ctx, SEM_ENERGY_PRICE_SPOT);
-    sdk_require_semantic(ctx, SEM_STORAGE_SOC);
-    sdk_optional_semantic(ctx, SEM_SOLAR_GHI);
-    
-    // Register endpoint
-    sdk_register_endpoint(ctx, "GET", "/api/energy-strategy", handle_strategy);
-    
-    sdk_run(ctx);
-    sdk_fini(&ctx);
-    return 0;
-}
-
-static int handle_strategy(plugin_ctx *ctx, const sdk_request *req, 
-                           sdk_response *resp) {
-    // Query 48 hours of price data
-    sdk_data_point *prices;
-    size_t count;
-    int64_t now = time(NULL);
-    sdk_query_range(ctx, SEM_ENERGY_PRICE_SPOT, now, now + 48*3600, 
-                    &prices, &count);
-    
-    // Query current battery SOC
-    sdk_data_point soc;
-    sdk_query_latest(ctx, SEM_STORAGE_SOC, &soc);
-    
-    // Run LPS solver
-    lps_problem problem = { /* ... */ };
-    lps_solution solution;
-    lps_solve(&problem, &solution);
-    
-    // Build response
-    char *json = build_strategy_json(&solution);
-    sdk_response_json(resp, json);
-    free(json);
-    
-    sdk_free_points(prices);
-    return 0;
-}
-```
+> **See [Plugin Development Tutorial](../../../../tutorials/plugins.md) for implementation examples.**
 
 ### Manifest
 

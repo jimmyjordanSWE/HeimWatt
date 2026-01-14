@@ -8,25 +8,26 @@
 #ifndef SDK_IPC_H
 #define SDK_IPC_H
 
+#include <errno.h>
 #include <stddef.h>
 
 typedef struct ipc_client ipc_client;
 
 /**
- * Connect to Core's IPC socket.
+ * Create IPC client and connect to Core's socket.
  *
  * @param client      Output pointer for client
  * @param socket_path Path to Unix socket
- * @return 0 on success, -1 on error
+ * @return 0 on success, negative errno on error
  */
-int ipc_client_connect(ipc_client** client, const char* socket_path);
+int ipc_client_create(ipc_client** client, const char* socket_path);
 
 /**
- * Disconnect from Core.
+ * Destroy IPC client and disconnect from Core.
  *
  * @param client Pointer to client (set to NULL on return)
  */
-void ipc_client_disconnect(ipc_client** client);
+void ipc_client_destroy(ipc_client** client);
 
 /**
  * Send message (blocks until sent).
@@ -34,7 +35,7 @@ void ipc_client_disconnect(ipc_client** client);
  * @param client Client
  * @param msg    Message to send
  * @param len    Message length
- * @return 0 on success, -1 on error
+ * @return 0 on success, negative errno on error
  */
 int ipc_client_send(ipc_client* client, const char* msg, size_t len);
 
@@ -46,7 +47,7 @@ int ipc_client_send(ipc_client* client, const char* msg, size_t len);
  * @param msg        Output message
  * @param len        Output message length
  * @param timeout_ms Timeout in milliseconds (-1 = forever)
- * @return 0 on success, -1 on error/timeout
+ * @return 0 on success, negative errno on error/timeout
  */
 int ipc_client_recv(ipc_client* client, char** msg, size_t* len, int timeout_ms);
 

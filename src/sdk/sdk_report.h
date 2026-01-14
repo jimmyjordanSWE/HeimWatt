@@ -8,6 +8,7 @@
 #ifndef SDK_REPORT_H
 #define SDK_REPORT_H
 
+#include <errno.h>
 #include <stddef.h>
 
 #include "heimwatt_sdk.h"
@@ -16,9 +17,9 @@
  * Validate metric before sending.
  *
  * @param m Metric
- * @return 0 if valid, -1 if invalid
+ * @return 0 if valid, negative errno if invalid
  */
-int sdk_metric_validate(const sdk_metric_t* m);
+int sdk_metric_validate(const sdk_metric* m);
 
 /**
  * Serialize metric to IPC JSON message.
@@ -26,6 +27,6 @@ int sdk_metric_validate(const sdk_metric_t* m);
  * @param m Metric
  * @return JSON string (caller frees) or NULL on error
  */
-char* sdk_metric_to_json(const sdk_metric_t* m);
+char* sdk_metric_to_json(const sdk_metric* m);
 
 #endif /* SDK_REPORT_H */

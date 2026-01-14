@@ -1,81 +1,85 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
 
-// #include "sqlite3.h" // Removed to hide implementation details
-typedef struct sqlite3 sqlite3;
+#define SECS_PER_HOUR 3600
+#define HOURS_PER_DAY 24
 
 // --- Macros (moved from prototype) ---
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
-#define MAX_BUFFER_SIZE 4096
-#define MAX_LOG_MSG 1024
-#define JSON_RESP_SIZE 512
-#define LARGE_BUF_SIZE 2048
-#define EVENT_BUF_SIZE 2200
-#define SMALL_BUF_SIZE 64
-#define SECS_PER_HOUR 3600
-#define HISTORY_HOURS 72
-#define DEFAULT_HORIZON 48
-#define DEFAULT_LIMIT 50
-#define MAX_LIMIT 500
-#define BASE_10 10
-#define TIMEOUT_SEC 15
-#define URL_BUF_SIZE 256
-#define HOURS_PER_DAY 24
-#define MAX_BACKFILL_EXISTING_ROWS 50
-#define BACKFILL_HOURS 72
-#define TM_YEAR_BASE 1900
-#define EXPECTED_SSCANF_ITEMS 6
-#define CLOUD_COVER_MOD 9
-#define PEAK_HOUR 14.0
-#define HOUR_SCALE 12.0
-#define TEMP_BASE 3.0
-#define TEMP_AMP 3.0
-#define BATTERY_EPSILON 0.1f
-#define BACKLOG_SIZE 5
-#define W_PER_KW 1000.0
-#define PV_MAX_KW 5.0f
-#define PRICE_EPSILON 0.0001f
-#define BATTERY_INITIAL_PCT 0.5f
-#define SELL_PRICE_RATIO 0.8f
-#define LATITUDE 59.33
-#define DAYS_PER_YEAR 365.0
-#define DEG_180 180.0
-#define DEG_PER_HOUR 15.0
-#define ATM_TRANS 0.8
-#define CLOUD_ATTEN 0.75
-#define MAX_OCTAS 8.0
-#define SOLAR_DECL_AMP 23.45
-#define SOLAR_DECL_OFFSET 284
-#define MIN_PER_HOUR 60.0
-#define SOLAR_NOON_OFF 11.0
-#define DEMAND_BASE 0.5f
-#define DEMAND_MORNING_PEAK 2.5f
-#define DEMAND_EVENING_PEAK 3.5f
-#define MORNING_PEAK_HOUR 8
-#define EVENING_PEAK_HOUR 20
-#define PEAK_WIDTH 8.0
-#define SQL_BUF_SIZE 512
-#define TIME_STR_LEN 20
-#define PIPELINE_TIME_BUF_SIZE 32
-#define SIM_TEMP_WINTER -2.0
-#define SIM_IRRAD_MOON 50.0
-#define SIM_PRICE_FIXED 1.50
-#define SIM_PRICE_FIXED_F 1.50f
-#define PORT_MAX 65535
-#define PRICE_FETCH_HOUR 13
 
-#define DEFAULT_PORT 8080
-#define DEFAULT_REFRESH_SEC 900
-#define DEFAULT_BATTERY_KWH 13.5F
-#define DEFAULT_CHARGE_RATE 5.0F
-#define DEFAULT_DISCHARGE_RATE 5.0F
-#define DEFAULT_EFFICIENCY 0.90F
+// --- Integer Constants (per coding standards: enum for integers) ---
+enum {
+    MAX_BUFFER_SIZE = 4096,
+    MAX_LOG_MSG = 1024,
+    JSON_RESP_SIZE = 512,
+    LARGE_BUF_SIZE = 2048,
+    EVENT_BUF_SIZE = 2200,
+    SMALL_BUF_SIZE = 64,
+    SECS_PER_HOUR = 3600,
+    HISTORY_HOURS = 72,
+    DEFAULT_HORIZON = 48,
+    DEFAULT_LIMIT = 50,
+    MAX_LIMIT = 500,
+    BASE_10 = 10,
+    TIMEOUT_SEC = 15,
+    URL_BUF_SIZE = 256,
+    HOURS_PER_DAY = 24,
+    MAX_BACKFILL_EXISTING_ROWS = 50,
+    BACKFILL_HOURS = 72,
+    TM_YEAR_BASE = 1900,
+    EXPECTED_SSCANF_ITEMS = 6,
+    CLOUD_COVER_MOD = 9,
+    BACKLOG_SIZE = 5,
+    SOLAR_DECL_OFFSET = 284,
+    MORNING_PEAK_HOUR = 8,
+    EVENING_PEAK_HOUR = 20,
+    SQL_BUF_SIZE = 512,
+    TIME_STR_LEN = 20,
+    PIPELINE_TIME_BUF_SIZE = 32,
+    PORT_MAX = 65535,
+    PRICE_FETCH_HOUR = 13,
+    DEFAULT_PORT = 8080,
+    DEFAULT_REFRESH_SEC = 900
+};
+
+// --- Float/Double Constants (per coding standards: static const for typed values) ---
+static const double PEAK_HOUR = 14.0;
+static const double HOUR_SCALE = 12.0;
+static const double TEMP_BASE = 3.0;
+static const double TEMP_AMP = 3.0;
+static const float BATTERY_EPSILON = 0.1f;
+static const double W_PER_KW = 1000.0;
+static const float PV_MAX_KW = 5.0f;
+static const float PRICE_EPSILON = 0.0001f;
+static const float BATTERY_INITIAL_PCT = 0.5f;
+static const float SELL_PRICE_RATIO = 0.8f;
+static const double LATITUDE = 59.33;
+static const double DAYS_PER_YEAR = 365.0;
+static const double DEG_180 = 180.0;
+static const double DEG_PER_HOUR = 15.0;
+static const double ATM_TRANS = 0.8;
+static const double CLOUD_ATTEN = 0.75;
+static const double MAX_OCTAS = 8.0;
+static const double SOLAR_DECL_AMP = 23.45;
+static const double MIN_PER_HOUR = 60.0;
+static const double SOLAR_NOON_OFF = 11.0;
+static const float DEMAND_BASE = 0.5f;
+static const float DEMAND_MORNING_PEAK = 2.5f;
+static const float DEMAND_EVENING_PEAK = 3.5f;
+static const double PEAK_WIDTH = 8.0;
+static const double SIM_TEMP_WINTER = -2.0;
+static const double SIM_IRRAD_MOON = 50.0;
+static const double SIM_PRICE_FIXED = 1.50;
+static const float SIM_PRICE_FIXED_F = 1.50f;
+static const float DEFAULT_BATTERY_KWH = 13.5F;
+static const float DEFAULT_CHARGE_RATE = 5.0F;
+static const float DEFAULT_DISCHARGE_RATE = 5.0F;
+static const float DEFAULT_EFFICIENCY = 0.90F;
 /**
  * @brief Log severity levels.
  */

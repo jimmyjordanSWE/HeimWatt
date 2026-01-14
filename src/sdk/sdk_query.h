@@ -8,6 +8,7 @@
 #ifndef SDK_QUERY_H
 #define SDK_QUERY_H
 
+#include <errno.h>
 #include <stddef.h>
 
 #include "heimwatt_sdk.h"
@@ -18,9 +19,9 @@
  * @param ctx  Plugin context
  * @param type Semantic type to query
  * @param out  Output data point
- * @return 0 on success, -1 if not found or error
+ * @return 0 on success, negative errno if not found or error
  */
-int sdk_query_send_latest(plugin_ctx* ctx, semantic_type type, sdk_data_point_t* out);
+int sdk_query_send_latest(plugin_ctx* ctx, semantic_type type, sdk_data_point* out);
 
 /**
  * Send range query and wait for response.
@@ -31,9 +32,9 @@ int sdk_query_send_latest(plugin_ctx* ctx, semantic_type type, sdk_data_point_t*
  * @param to_ts   End timestamp
  * @param out     Output data point array
  * @param count   Output count
- * @return 0 on success, -1 on error
+ * @return 0 on success, negative errno on error
  */
 int sdk_query_send_range(plugin_ctx* ctx, semantic_type type, int64_t from_ts, int64_t to_ts,
-                         sdk_data_point_t** out, size_t* count);
+                         sdk_data_point** out, size_t* count);
 
 #endif /* SDK_QUERY_H */

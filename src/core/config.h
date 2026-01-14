@@ -30,11 +30,11 @@ typedef struct {
 int config_load(heimwatt_config* cfg, const char* path);
 
 /**
- * Free configuration resources.
+ * Finalize and free configuration resources.
  *
- * @param cfg Configuration structure
+ * @param cfg Pointer to configuration pointer (set to NULL on return)
  */
-void config_destroy(heimwatt_config* cfg);
+void config_fini(heimwatt_config** cfg);
 
 /**
  * Initialize configuration with default values.

@@ -1,6 +1,7 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include "db.h"
 #include "types.h"
 
 /* ========================================================================
@@ -84,14 +85,12 @@ void server_set_next_fetch(server_ctx* ctx, time_t next_weather, time_t next_pri
  * @param ctx Server context.
  * @return true if running, false if shutdown requested.
  */
-bool server_is_running(server_ctx* ctx);
+bool server_is_running(const server_ctx* ctx);
 
 /**
- * @brief Get the raw SQLite database handle.
- * @param ctx Server context.
- * @return Pointer to sqlite3 handle.
+ * @return Pointer to database handle.
  */
-sqlite3* server_get_db(server_ctx* ctx);
+db_handle* server_get_db(server_ctx* ctx);
 
 /**
  * @brief Get the configuration object.

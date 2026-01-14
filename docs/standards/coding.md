@@ -60,48 +60,37 @@ int config_get_port(const config* cfg);
 
 // Non-Blocking: use _try suffix
 int mutex_trylock(mutex* m);  // Returns -EBUSY if locked
-void* pool_try_acquire(pool* p); // Returns NULL if empty
+void* pool_try_get(pool* p);   // Returns NULL if empty
 ```
 
 ### Lifecycle Naming Pairs
 
-Every start operation must have a matching end operation using **symmetric antonyms**:
+Naming conveys memory and resource ownership. We use three primary pairs to distinguish between allocation and initialization:
 
 | Start | End | Use For |
 |-------|-----|---------|
-| `create` | `destroy` | Object allocation/deallocation |
-| `init` | `fini` | In-place initialization/finalization |
-| `open` | `close` | Resources (files, connections) |
-| `start` | `stop` | Processes, threads, services |
-| `acquire` | `release` | Locks, pool resources |
-| `lock` | `unlock` | Mutexes |
-| `connect` | `disconnect` | Network connections |
-| `begin` | `end` | Transactions, scoped operations |
-| `push` | `pop` | Stack-like operations |
-| `enter` | `leave` | Contexts, critical sections |
+| `create` | `destroy` | **Heap Allocation**: Caller owns the memory. Returns `T*` or takes `T**`. |
+| `init` | `fini` | **In-place Initialization**: Caller provided memory (stack/struct). Takes `T*`. |
+| `open` | `close` | **External Resources**: Files, Sockets, Database connections. |
+| `start` | `stop` | **Execution Units**: Threads, Processes, Services. |
 
 **Rules**:
-- Pick ONE pair per concept and use it consistently
-- `module_create()` → `module_destroy()` (not `module_free`, not `module_delete`)
-- `module_init()` → `module_fini()` (not `module_deinit`, not `module_cleanup`)
+- **Heap vs. Stack**: Use `create/destroy` if the function calls `malloc`. Use `init/fini` if the function only populates a pointer provided by the caller.
+- **Symmetry**: Never mix pairs (e.g., no `create` with `free`).
+- **Opaque Pointers**: Destructors for heap objects (`destroy`) should take a double pointer `T**` and set it to `NULL` to prevent use-after-free.
 
 ```c
-// GOOD: symmetric pairs
+// HEAP: symmetric Pairs
 cache* cache_create(size_t capacity);
 void   cache_destroy(cache** c);
 
+// STACK: in-place
 int    server_init(server* s, const config* cfg);
 void   server_fini(server* s);
 
-int    conn_open(connection* c, const char* host);
-void   conn_close(connection* c);
-
-// BAD: mismatched naming
-cache* cache_new(void);      // should be cache_create
-void   cache_free(cache* c);  // should be cache_destroy
-
-int    server_setup(void);    // should be server_init
-void   server_cleanup(void);  // should be server_fini
+// SYSTEM: resources
+int    db_open(db* d, const char* path);
+void   db_close(db* d);
 ```
 
 ### Variables
@@ -586,16 +575,6 @@ cleanup:
 
 > **Note**: To handle specific error codes (like `-EBADMSG` above), use a standard `if` block.
 
-
-
-
-
-
-
-
-
-
-
 ## Resource Management & Safety
 
 ### Memory Management
@@ -784,7 +763,7 @@ CFLAGS += -D_FORTIFY_SOURCE=2 -O2
 
 > **Thread Safety Rules**
 > 1.  **Lock Data, Not Code**: Protect shared mutable state with mutexes.
-> 2.  **Consistent Ordering**: Always acquire locks in the same global order to prevent deadlocks.
+> 2.  **Consistent Ordering**: Always lock resources in the same global order to prevent deadlocks.
 > 3.  **Minimize Critical Sections**: Hold locks for the minimum time necessary.
 > 4.  **Prefer Immutability**: Immutable data is inherently thread-safe.
 > 5.  **Thread Local**: Use thread-local storage where possible to avoid contention.
@@ -935,10 +914,10 @@ typedef struct {
 
 // Get an object from the pool
 // (Implementation choice: Block or return NULL if available = 0)
-void* pool_acquire(resource_pool* p);
+void* pool_get(resource_pool* p);
 
-// Return an object to the pool (Reset state before releasing!)
-void pool_release(resource_pool* p, void* resource);
+// Return an object to the pool (Reset state before returning!)
+void pool_put(resource_pool* p, void* resource);
 ```
 
 ### Design Pattern 5: Observer/Callback

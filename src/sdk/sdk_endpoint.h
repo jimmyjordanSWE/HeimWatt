@@ -8,6 +8,8 @@
 #ifndef SDK_ENDPOINT_H
 #define SDK_ENDPOINT_H
 
+#include <errno.h>
+
 #include "heimwatt_sdk.h"
 
 /**
@@ -16,7 +18,7 @@
  * @param ctx    Plugin context
  * @param method HTTP method
  * @param path   URL path
- * @return 0 on success, -1 on error
+ * @return 0 on success, negative errno on error
  */
 int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path);
 
@@ -25,7 +27,7 @@ int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path)
  *
  * @param ctx          Plugin context
  * @param request_json Raw JSON request from Core
- * @return 0 on success, -1 on error
+ * @return 0 on success, negative errno on error
  */
 int sdk_endpoint_dispatch(plugin_ctx* ctx, const char* request_json);
 

@@ -4,7 +4,7 @@
 #include <pthread.h>
 
 #include "config.h"
-#include "sqlite3.h"
+#include "db.h"
 #include "types.h"
 
 // --- Contexts ---
@@ -16,7 +16,7 @@ struct server_ctx {
     int server_sock_fd;                         // Listening socket
     pthread_mutex_t lock;                       // State lock
     pthread_cond_t data_cond;                   // Update notification
-    sqlite3* db;                                // Database handle
+    db_handle* db;                              // Database handle
     weather_data last_weather;                  // Most recent weather
     spot_price last_price;                      // Most recent spot price
     float last_forecast_prices[HOURS_PER_DAY];  // 24h price forecast
