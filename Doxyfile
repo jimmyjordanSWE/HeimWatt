@@ -1,0 +1,47 @@
+# Doxyfile for HeimWatt
+# Run: make docs
+
+PROJECT_NAME           = "HeimWatt"
+PROJECT_BRIEF          = "Extensible data platform for energy optimization"
+PROJECT_NUMBER         = 0.1.0
+
+OUTPUT_DIRECTORY       = build/docs
+INPUT                  = include src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.c
+
+# Exclude internal headers
+EXCLUDE_PATTERNS       = *_internal.h
+
+# Extract settings
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = NO
+
+# Documentation format
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = YES
+SHOW_INCLUDE_FILES     = YES
+INLINE_SOURCES         = NO
+
+# Output formats
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+# HTML settings
+HTML_OUTPUT            = html
+HTML_COLORSTYLE        = DARK
+SEARCHENGINE           = YES
+DISABLE_INDEX          = NO
+
+# Diagrams
+HAVE_DOT               = NO
+CLASS_DIAGRAMS         = NO
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+QUIET                  = YES

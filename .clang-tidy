@@ -1,0 +1,6 @@
+---
+Checks:          'clang-diagnostic-*,readability-*,bugprone-*,cert-*,performance-*'
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/.*'
+FormatStyle:     file
+...
