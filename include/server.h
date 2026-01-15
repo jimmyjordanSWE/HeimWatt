@@ -30,6 +30,7 @@
  * ```
  */
 
+#include <signal.h>
 #include <stdbool.h>
 
 /**
@@ -50,7 +51,7 @@ typedef struct heimwatt_ctx heimwatt_ctx;
  *
  * @threadsafe No.
  */
-heimwatt_ctx* heimwatt_create(void);
+heimwatt_ctx *heimwatt_create(void);
 
 /**
  * @brief Initialize the system.
@@ -58,12 +59,12 @@ heimwatt_ctx* heimwatt_create(void);
  * Loads config, connects to DB, starts IPC server.
  *
  * @param ctx Context to initialize.
- * @param config_path Path to configuration JSON (NULL for defaults).
+ * @param base_path Storage base path (e.g., "data/stockholm").
  * @return 0 on success, -1 on failure.
  *
  * @threadsafe No.
  */
-int heimwatt_init(heimwatt_ctx* ctx, const char* config_path);
+int heimwatt_init(heimwatt_ctx *ctx, const char *base_path);
 
 /**
  * @brief Run the main loop.
@@ -75,7 +76,21 @@ int heimwatt_init(heimwatt_ctx* ctx, const char* config_path);
  *
  * @threadsafe No (caller must be main thread).
  */
-void heimwatt_run(heimwatt_ctx* ctx);
+void heimwatt_run(heimwatt_ctx *ctx);
+
+/**
+ * @brief Run the main loop with external shutdown flag.
+ *
+ * Like heimwatt_run(), but polls an external shutdown flag.
+ * This allows signal handlers to trigger shutdown in an async-signal-safe
+ * manner by setting the flag without calling non-signal-safe functions.
+ *
+ * @param ctx Initialized context.
+ * @param shutdown_flag Pointer to volatile flag (set to non-zero to shutdown).
+ *
+ * @threadsafe No (caller must be main thread).
+ */
+void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomic_t *shutdown_flag);
 
 /**
  * @brief Request graceful shutdown.
@@ -88,7 +103,7 @@ void heimwatt_run(heimwatt_ctx* ctx);
  * @threadsafe Yes.
  * @signalsafe Yes.
  */
-void heimwatt_request_shutdown(heimwatt_ctx* ctx);
+void heimwatt_request_shutdown(heimwatt_ctx *ctx);
 
 /**
  * @brief Destroy context and free resources.
@@ -99,7 +114,7 @@ void heimwatt_request_shutdown(heimwatt_ctx* ctx);
  *
  * @threadsafe No.
  */
-void heimwatt_destroy(heimwatt_ctx** ctx_ptr);
+void heimwatt_destroy(heimwatt_ctx **ctx_ptr);
 
 /**
  * @brief Check if system is running.
@@ -109,6 +124,6 @@ void heimwatt_destroy(heimwatt_ctx** ctx_ptr);
  *
  * @threadsafe Yes.
  */
-bool heimwatt_is_running(const heimwatt_ctx* ctx);
+bool heimwatt_is_running(const heimwatt_ctx *ctx);
 
 #endif /* HEIMWATT_SERVER_H */

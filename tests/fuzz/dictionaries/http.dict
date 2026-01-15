@@ -1,0 +1,11 @@
+# HTTP Dictionary for AFL
+"GET"
+"POST"
+"PUT"
+"DELETE"
+"HTTP/1.1"
+"Host:"
+"Content-Length:"
+"Content-Type:"
+"\x0D\x0A"
+"\x0D\x0A\x0D\x0A"

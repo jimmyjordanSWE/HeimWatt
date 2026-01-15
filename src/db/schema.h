@@ -20,7 +20,7 @@
  * @param conn Database connection
  * @return DB_OK on success, DB_ERROR on failure
  */
-int schema_init(db_conn* conn);
+int schema_init(db_conn *conn);
 
 /**
  * Get current schema version.
@@ -28,7 +28,7 @@ int schema_init(db_conn* conn);
  * @param conn Database connection
  * @return Schema version number, or -1 on error
  */
-int schema_version(db_conn* conn);
+int schema_version(db_conn *conn);
 
 /**
  * Migrate to target version.
@@ -37,6 +37,6 @@ int schema_version(db_conn* conn);
  * @param target_version Target schema version
  * @return DB_OK on success, DB_ERROR on failure
  */
-int schema_migrate(db_conn* conn, int target_version);
+int schema_migrate(db_conn *conn, int target_version);
 
 #endif /* HEIMWATT_SCHEMA_H */

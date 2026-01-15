@@ -1,7 +1,35 @@
 ---
 Language:        Cpp
 BasedOnStyle:    Google
+# HEIMWATT Style Overrides
 IndentWidth:     4
 ColumnLimit:     100
 SortIncludes:    true
----
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass:      true
+  AfterControlStatement: Always
+  AfterEnum:       true
+  AfterFunction:   true
+  AfterNamespace:  true
+  AfterStruct:     true
+  AfterUnion:      true
+  BeforeCatch:     true
+  BeforeElse:      true
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+Standard:        Latest
+DerivePointerAlignment: false
+PointerAlignment: Right
+SpaceAfterCStyleCast: true
+IncludeBlocks:   Regroup
+IncludeCategories:
+  - Regex:           '^"module\.h"'
+    Priority:        -1
+  - Regex:           '^<'
+    Priority:        1
+  - Regex:           '^"'
+    Priority:        2
+...

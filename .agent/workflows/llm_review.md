@@ -32,3 +32,6 @@ If the work embodies sound engineering—proper separation of concerns, earned c
     - **API Design**: Are function signatures predictable? Are `const` correctness rules followed for input parameters vs output parameters?
     - **Naming**: Do names reflect *intent* rather than just type? (e.g. `is_connected` vs `flag`)
 4. Produce a report (llm_rev_report.md in root) summarizing any violations found, citing the specific section of `coding_standards.md` that was violated. If the code looks good, explicitly state that it adheres to the semantic and architectural standards.
+5. **Changelog**: If this review marks the completion of a significant unit of work, update (or verify) `CHANGELOG.md` in the root.
+    - **Format**: Terse changes, time/date notes. (e.g., `YYYY-MM-DD hh:mm: - API endpoints added`, `- Fixed protocol mismatch`).
+    - **Content**: Focus on architectural and surface-level changes.

@@ -1,0 +1,1 @@
+Log {date} entry for {iso}.

@@ -20,38 +20,42 @@
 /**
  * HTTP request structure.
  */
-typedef struct {
+typedef struct
+{
     char method[HTTP_MAX_METHOD]; /**< "GET", "POST", etc. */
     char path[HTTP_MAX_PATH];     /**< "/api/plan" */
     char query[HTTP_MAX_PATH];    /**< "foo=bar" (without '?') */
 
     /* Headers */
-    struct {
+    struct
+    {
         char name[HTTP_MAX_HEADER_NAME];
         char value[HTTP_MAX_HEADER_VALUE];
     } headers[HTTP_MAX_HEADERS];
     size_t header_count;
 
     /* Body */
-    char* body; /**< Heap-allocated, caller frees */
+    char *body; /**< Heap-allocated, caller frees */
     size_t body_len;
 } http_request;
 
 /**
  * HTTP response structure.
  */
-typedef struct {
+typedef struct
+{
     int status_code; /**< 200, 404, etc. */
 
     /* Headers */
-    struct {
+    struct
+    {
         char name[HTTP_MAX_HEADER_NAME];
         char value[HTTP_MAX_HEADER_VALUE];
     } headers[HTTP_MAX_HEADERS];
     size_t header_count;
 
     /* Body */
-    char* body; /**< Heap-allocated, caller frees */
+    char *body; /**< Heap-allocated, caller frees */
     size_t body_len;
 } http_response;
 
@@ -67,7 +71,7 @@ typedef struct {
  * @param req Output request structure
  * @return 0 on success, -1 on parse error
  */
-int http_parse_request(const char* raw, size_t len, http_request* req);
+int http_parse_request(const char *raw, size_t len, http_request *req);
 
 /**
  * Serialize HTTP response to wire format.
@@ -78,7 +82,7 @@ int http_parse_request(const char* raw, size_t len, http_request* req);
  * @param out_len Output length
  * @return 0 on success, -1 on error
  */
-int http_serialize_response(const http_response* resp, char** out, size_t* out_len);
+int http_serialize_response(const http_response *resp, char **out, size_t *out_len);
 
 /* ============================================================
  * HEADER HELPERS
@@ -91,7 +95,7 @@ int http_serialize_response(const http_response* resp, char** out, size_t* out_l
  * @param name Header name
  * @return Header value or NULL if not found
  */
-const char* http_request_header(const http_request* req, const char* name);
+const char *http_request_header(const http_request *req, const char *name);
 
 /**
  * Set response header.
@@ -100,7 +104,7 @@ const char* http_request_header(const http_request* req, const char* name);
  * @param name  Header name
  * @param value Header value
  */
-void http_response_set_header(http_response* resp, const char* name, const char* value);
+void http_response_set_header(http_response *resp, const char *name, const char *value);
 
 /* ============================================================
  * CONVENIENCE FUNCTIONS
@@ -112,7 +116,7 @@ void http_response_set_header(http_response* resp, const char* name, const char*
  * @param resp Response
  * @param json JSON string
  */
-void http_response_set_json(http_response* resp, const char* json);
+void http_response_set_json(http_response *resp, const char *json);
 
 /**
  * Set status with reason phrase.
@@ -120,7 +124,7 @@ void http_response_set_json(http_response* resp, const char* json);
  * @param resp Response
  * @param code HTTP status code
  */
-void http_response_set_status(http_response* resp, int code);
+void http_response_set_status(http_response *resp, int code);
 
 /* ============================================================
  * CLEANUP
@@ -129,21 +133,21 @@ void http_response_set_status(http_response* resp, int code);
 /**
  * Initialize request structure.
  */
-void http_request_init(http_request* req);
+void http_request_init(http_request *req);
 
 /**
  * Initialize response structure.
  */
-void http_response_init(http_response* resp);
+void http_response_init(http_response *resp);
 
 /**
  * Free request resources.
  */
-void http_request_destroy(http_request* req);
+void http_request_destroy(http_request *req);
 
 /**
  * Free response resources.
  */
-void http_response_destroy(http_response* resp);
+void http_response_destroy(http_response *resp);
 
 #endif /* HEIMWATT_HTTP_PARSE_H */

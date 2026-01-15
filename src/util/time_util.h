@@ -34,7 +34,7 @@ int64_t time_now_ms(void);
  * @param size Buffer size (min 20 bytes for "YYYY-MM-DDTHH:MM:SS")
  * @return 0 on success, -1 on error
  */
-int time_format_iso(int64_t ts, char* buf, size_t size);
+int time_format_iso(int64_t ts, char *buf, size_t size);
 
 /**
  * Parse ISO 8601 string to timestamp.
@@ -42,7 +42,7 @@ int time_format_iso(int64_t ts, char* buf, size_t size);
  * @param str ISO 8601 string
  * @return Timestamp or -1 on error
  */
-int64_t time_parse_iso(const char* str);
+int64_t time_parse_iso(const char *str);
 
 /**
  * Get start of hour containing timestamp.

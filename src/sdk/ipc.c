@@ -5,53 +5,91 @@
 
 #include "sdk_internal.h"
 
-int sdk_ipc_send(plugin_ctx* ctx, const char* json_msg) {
-    if (!ctx) return -1;
+int sdk_ipc_send(plugin_ctx *ctx, const char *json_msg)
+{
+    if (!ctx) return -EINVAL;
 
     // Lazy connect
-    if (ctx->ipc_fd < 0) {
-        if (sdk_ipc_connect(ctx) < 0) return -1;
+    if (ctx->ipc_fd < 0)
+    {
+        if (sdk_ipc_connect(ctx) < 0) return -ENOTCONN;
     }
 
-    if (ctx->ipc_fd < 0) return -1;
+    if (ctx->ipc_fd < 0) return -ENOTCONN;
 
     // Simple protocol: Newline delimited JSON
-
     size_t len = strlen(json_msg);
     ssize_t sent = write(ctx->ipc_fd, json_msg, len);
-    if (sent < 0) return -1;
+    if (sent < 0) return -errno;
 
     char newline = '\n';
-    write(ctx->ipc_fd, &newline, 1);
+    ssize_t ret = write(ctx->ipc_fd, &newline, 1);
+    (void) ret;  // Ignore partial write for newline
 
     return 0;
 }
 
-int sdk_ipc_recv(plugin_ctx* ctx, char* buf, size_t len) {
-    if (!ctx || ctx->ipc_fd < 0) return -1;
+// Buffered receive - reads efficiently in bulk, extracts newline-delimited messages
+int sdk_ipc_recv(plugin_ctx *ctx, char *buf, size_t len)
+{
+    if (!ctx || ctx->ipc_fd < 0 || !buf || len == 0) return -EINVAL;
 
-    // Blocking read for now (simple request-response)
-    // In sdk_run, we poll. But for synchronous calls like get_config, we might block?
-    // Mixed async/sync on same socket is hard.
-    // Ideally get_config is done during init (sync) or via async ID matching.
+    while (1)
+    {
+        // 1. Check if we already have a complete line in buffer
+        char *newline = memchr(ctx->ipc_buf + ctx->ipc_rpos, '\n', ctx->ipc_wpos - ctx->ipc_rpos);
+        if (newline)
+        {
+            size_t msg_len = newline - (ctx->ipc_buf + ctx->ipc_rpos);
 
-    // For MVP, simple blocking read of one line.
-    size_t received = 0;
-    while (received < len - 1) {
-        char c;
-        ssize_t n = read(ctx->ipc_fd, &c, 1);
-        if (n <= 0) return -1;
+            // Check if output buffer is large enough
+            if (msg_len >= len)
+            {
+                msg_len = len - 1;  // Truncate
+            }
 
-        if (c == '\n') break;
-        buf[received++] = c;
+            memcpy(buf, ctx->ipc_buf + ctx->ipc_rpos, msg_len);
+            buf[msg_len] = '\0';
+
+            // Advance read position past newline
+            ctx->ipc_rpos += msg_len + 1;
+            return 0;
+        }
+
+        // 2. No complete line - need more data
+        // If buffer is full and no newline, we have a problem
+        if (ctx->ipc_wpos == SDK_IPC_BUFFER_SIZE)
+        {
+            if (ctx->ipc_rpos == 0)
+            {
+                // Message too big - reset buffer
+                ctx->ipc_wpos = 0;
+                return -EMSGSIZE;
+            }
+
+            // Compact buffer: move active data to front
+            size_t active = ctx->ipc_wpos - ctx->ipc_rpos;
+            memmove(ctx->ipc_buf, ctx->ipc_buf + ctx->ipc_rpos, active);
+            ctx->ipc_rpos = 0;
+            ctx->ipc_wpos = active;
+        }
+
+        // 3. Read from socket in bulk
+        ssize_t n =
+            read(ctx->ipc_fd, ctx->ipc_buf + ctx->ipc_wpos, SDK_IPC_BUFFER_SIZE - ctx->ipc_wpos);
+        if (n < 0)
+        {
+            if (errno == EINTR) continue;
+            return -errno;
+        }
+        if (n == 0) return -ECONNRESET;
+
+        ctx->ipc_wpos += n;
     }
-    buf[received] = 0;
-    return 0;
 }
 
-#include <string.h>
-
-bool sdk_ipc_check_data(plugin_ctx* ctx, int64_t ts) {
+bool sdk_ipc_check_data(plugin_ctx *ctx, int64_t ts)
+{
     if (!ctx) return false;
 
     char buf[256];
@@ -63,7 +101,8 @@ bool sdk_ipc_check_data(plugin_ctx* ctx, int64_t ts) {
     if (sdk_ipc_recv(ctx, resp, sizeof(resp)) < 0) return false;
 
     // Expect {"exists": true/false}
-    if (strstr(resp, "\"exists\":true") || strstr(resp, "\"exists\": true")) {
+    if (strstr(resp, "\"exists\":true") || strstr(resp, "\"exists\": true"))
+    {
         return true;
     }
 

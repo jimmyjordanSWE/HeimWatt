@@ -21,7 +21,7 @@ typedef struct heimwatt_ctx heimwatt_ctx;
  *
  * @note Internal use only.
  */
-void* pipeline_thread_func(void* arg);
+void *pipeline_thread_func(void *arg);
 
 /**
  * Initial data backfill helper.
@@ -31,6 +31,6 @@ void* pipeline_thread_func(void* arg);
  *
  * @note Internal use only.
  */
-void pipeline_backfill(heimwatt_ctx* ctx);
+void pipeline_backfill(heimwatt_ctx *ctx);
 
 #endif /* HEIMWATT_PIPELINE_H */

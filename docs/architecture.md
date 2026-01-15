@@ -1,6 +1,6 @@
 # System Architecture
 
-> **Version**: 2.0 (2026-01-15)
+> **Version**: 2.1 (2026-01-15)
 
 ---
 
@@ -28,6 +28,11 @@ heimwatt/
 │   ├── utils.h
 │   └── version.h
 │
+├── libs/             # Third-party dependencies
+│   ├── cJSON.h       - JSON parsing
+│   ├── log.h         - Structured logging
+│   └── sqlite3.h     - SQL database engine
+│
 ├── src/
 │   ├── core/         # Central broker
 │   │   ├── core.h        - Lifecycle, orchestration
@@ -45,8 +50,8 @@ heimwatt/
 │   │   └── queries.h         - Prepared statements
 │   │
 │   ├── net/          # Network stack
-│   │   ├── tcp_server.h  - Raw sockets
-│   │   ├── http_server.h - Accept loop
+│   │   ├── tcp_server.h  - Non-blocking socket handling
+│   │   ├── http_server.h - epoll-based event loop
 │   │   ├── http_parse.h  - Request/response parsing
 │   │   ├── http_client.h - Outbound requests
 │   │   └── json.h        - JSON encode/decode
@@ -120,6 +125,7 @@ JSON over Unix domain sockets. Newline-delimited messages.
 | Plugin → Core | `HELLO` | Handshake with plugin ID |
 | Plugin → Core | `REPORT` | Submit Tier 1 data point |
 | Plugin → Core | `REPORT_RAW` | Submit Tier 2 data |
+| Plugin → Core | `CHECK_DATA` | Check if data point exists (Backfill) |
 | Plugin → Core | `QUERY_LATEST` | Get most recent value |
 | Plugin → Core | `QUERY_RANGE` | Get historical data |
 | Plugin → Core | `REGISTER_ENDPOINT` | Claim HTTP route |

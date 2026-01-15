@@ -20,7 +20,7 @@
  * @param path   URL path
  * @return 0 on success, negative errno on error
  */
-int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path);
+int sdk_endpoint_register(plugin_ctx *ctx, const char *method, const char *path);
 
 /**
  * Handle incoming HTTP_REQUEST message.
@@ -29,6 +29,6 @@ int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path)
  * @param request_json Raw JSON request from Core
  * @return 0 on success, negative errno on error
  */
-int sdk_endpoint_dispatch(plugin_ctx* ctx, const char* request_json);
+int sdk_endpoint_dispatch(plugin_ctx *ctx, const char *request_json);
 
 #endif  // HEIMWATT_SDK_ENDPOINT_H */

@@ -71,14 +71,14 @@ typedef struct file_db file_db;
  * @param base_dir Base directory for data files (e.g., "./data").
  * @return 0 on success, -1 on error.
  */
-int file_db_open(file_db** db, const char* base_dir);
+int file_db_open(file_db **db, const char *base_dir);
 
 /**
  * Close file database and flush buffers.
  *
  * @param db Pointer to handle (set to NULL on return).
  */
-void file_db_close(file_db** db);
+void file_db_close(file_db **db);
 
 /* ============================================================================
  * Tier 1: Semantic Data (one file per semantic type)
@@ -97,8 +97,8 @@ void file_db_close(file_db** db);
  * @param source_id Plugin ID.
  * @return 0 on success, -1 on error.
  */
-int file_db_append_tier1(file_db* db, semantic_type type, int64_t timestamp, double value,
-                         const char* currency, const char* source_id);
+int file_db_append_tier1(file_db *db, semantic_type type, int64_t timestamp, double value,
+                         const char *currency, const char *source_id);
 
 /**
  * Read latest value for a semantic type.
@@ -111,7 +111,7 @@ int file_db_append_tier1(file_db* db, semantic_type type, int64_t timestamp, dou
  * @param out_ts  Output timestamp.
  * @return 0 if found, -1 if not found or error.
  */
-int file_db_read_latest_tier1(file_db* db, semantic_type type, double* out_val, int64_t* out_ts);
+int file_db_read_latest_tier1(file_db *db, semantic_type type, double *out_val, int64_t *out_ts);
 
 /* ============================================================================
  * Tier 2: Raw Data (one file per source plugin)
@@ -129,8 +129,8 @@ int file_db_read_latest_tier1(file_db* db, semantic_type type, double* out_val, 
  * @param source_id    Plugin ID.
  * @return 0 on success, -1 on error.
  */
-int file_db_append_tier2(file_db* db, const char* key, int64_t timestamp, const char* json_payload,
-                         const char* source_id);
+int file_db_append_tier2(file_db *db, const char *key, int64_t timestamp, const char *json_payload,
+                         const char *source_id);
 
 /**
  * Read latest raw data for a key.
@@ -141,7 +141,7 @@ int file_db_append_tier2(file_db* db, const char* key, int64_t timestamp, const 
  * @param out_ts   Output timestamp.
  * @return 0 if found, -1 if not found or error.
  */
-int file_db_read_latest_tier2(file_db* db, const char* key, char** out_json, int64_t* out_ts);
+int file_db_read_latest_tier2(file_db *db, const char *key, char **out_json, int64_t *out_ts);
 
 /* ============================================================================
  * Debug Utilities
@@ -154,7 +154,7 @@ int file_db_read_latest_tier2(file_db* db, const char* key, char** out_json, int
  *
  * @param db Database handle.
  */
-void file_db_flush(file_db* db);
+void file_db_flush(file_db *db);
 
 /**
  * Get path to a specific log file.
@@ -168,7 +168,7 @@ void file_db_flush(file_db* db);
  * @param buflen Buffer size.
  * @return 0 on success, -1 if buffer too small.
  */
-int file_db_get_path(const file_db* db, semantic_type type, const char* key, char* buf,
+int file_db_get_path(const file_db *db, semantic_type type, const char *key, char *buf,
                      size_t buflen);
 
 #endif /* HEIMWATT_FILE_BACKEND_H */

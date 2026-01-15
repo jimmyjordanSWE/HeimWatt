@@ -146,7 +146,8 @@
     X(SOIL_MOISTURE_10CM, "soil.moisture.10cm", "m3/m3", "Moisture at 10cm")
 
 // Semantic Type Enum
-typedef enum {
+typedef enum
+{
     SEM_UNKNOWN = 0,
 #define X(suffix, id, unit, desc) SEM_##suffix,
     HEIMWATT_SEMANTIC_TYPES(X)
@@ -155,17 +156,18 @@ typedef enum {
 } semantic_type;
 
 // Metadata Structure
-typedef struct {
+typedef struct
+{
     semantic_type type;
-    const char* id;
-    const char* unit;
-    const char* description;
+    const char *id;
+    const char *unit;
+    const char *description;
 } semantic_meta;
 
 // Metadata Lookup function (implemented in .c)
-const semantic_meta* semantic_get_meta(semantic_type type);
+const semantic_meta *semantic_get_meta(semantic_type type);
 
 // Helper: Get enum from ID string (O(N) or specialized lookup)
-semantic_type semantic_from_string(const char* id);
+semantic_type semantic_from_string(const char *id);
 
 #endif  // HEIMWATT_SEMANTIC_TYPES_H

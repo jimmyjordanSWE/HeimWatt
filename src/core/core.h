@@ -21,7 +21,7 @@ typedef struct heimwatt_ctx heimwatt_ctx;
  * @param config_path Path to configuration file
  * @return 0 on success, -1 on error
  */
-int core_init(heimwatt_ctx** ctx, const char* config_path);
+int core_init(heimwatt_ctx **ctx, const char *config_path);
 
 /**
  * Run the main event loop.
@@ -30,7 +30,7 @@ int core_init(heimwatt_ctx** ctx, const char* config_path);
  * @param ctx HeimWatt context
  * @return 0 on normal shutdown, -1 on error
  */
-int core_run(heimwatt_ctx* ctx);
+int core_run(heimwatt_ctx *ctx);
 
 /**
  * Request graceful shutdown.
@@ -38,14 +38,14 @@ int core_run(heimwatt_ctx* ctx);
  *
  * @param ctx HeimWatt context
  */
-void core_shutdown(heimwatt_ctx* ctx);
+void core_shutdown(heimwatt_ctx *ctx);
 
 /**
  * Destroy context and free all resources.
  *
  * @param ctx Pointer to context (set to NULL on return)
  */
-void core_destroy(heimwatt_ctx** ctx);
+void core_destroy(heimwatt_ctx **ctx);
 
 /**
  * Check if system is running.
@@ -53,6 +53,6 @@ void core_destroy(heimwatt_ctx** ctx);
  * @param ctx HeimWatt context
  * @return true if running, false otherwise
  */
-bool core_is_running(const heimwatt_ctx* ctx);
+bool core_is_running(const heimwatt_ctx *ctx);
 
 #endif /* HEIMWATT_CORE_H */

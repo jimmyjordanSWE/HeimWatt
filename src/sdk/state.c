@@ -5,7 +5,8 @@
 
 #include "sdk_internal.h"
 
-int sdk_state_save(plugin_ctx* ctx, const char* key, const char* value) {
+int sdk_state_save(plugin_ctx *ctx, const char *key, const char *value)
+{
     if (!ctx || !key || !value) return -1;
 
     char buf[1024];
@@ -27,7 +28,8 @@ int sdk_state_save(plugin_ctx* ctx, const char* key, const char* value) {
     return -1;
 }
 
-int sdk_state_load(plugin_ctx* ctx, const char* key, char** value_out) {
+int sdk_state_load(plugin_ctx *ctx, const char *key, char **value_out)
+{
     if (!ctx || !key || !value_out) return -1;
 
     char buf[256];
@@ -38,11 +40,13 @@ int sdk_state_load(plugin_ctx* ctx, const char* key, char** value_out) {
     char resp[1024];
     if (sdk_ipc_recv(ctx, resp, sizeof(resp)) < 0) return -1;
 
-    char* p = strstr(resp, "\"val\":\"");
-    if (p) {
+    char *p = strstr(resp, "\"val\":\"");
+    if (p)
+    {
         p += 7;
-        char* end = strchr(p, '"');
-        if (end) {
+        char *end = strchr(p, '"');
+        if (end)
+        {
             size_t len = end - p;
             *value_out = malloc(len + 1);
             strncpy(*value_out, p, len);

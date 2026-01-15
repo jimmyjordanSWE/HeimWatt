@@ -27,14 +27,14 @@ typedef struct data_store data_store;
  * @param db_path Path to database file
  * @return 0 on success, -1 on error
  */
-int data_store_create(data_store** ds, const char* db_path);
+int data_store_create(data_store **ds, const char *db_path);
 
 /**
  * Destroy data store.
  *
  * @param ds Pointer to data store (set to NULL on return)
  */
-void data_store_destroy(data_store** ds);
+void data_store_destroy(data_store **ds);
 
 /* ============================================================
  * TIER 1: KNOWN SEMANTIC TYPES
@@ -43,11 +43,12 @@ void data_store_destroy(data_store** ds);
 /**
  * Data point for Tier 1 storage.
  */
-typedef struct {
+typedef struct
+{
     int64_t timestamp;     /**< Unix timestamp */
     double value;          /**< Numeric value */
     char currency[4];      /**< Optional ISO currency code */
-    const char* source_id; /**< Plugin ID that reported this */
+    const char *source_id; /**< Plugin ID that reported this */
 } data_point;
 
 /**
@@ -58,7 +59,7 @@ typedef struct {
  * @param pt   Data point to insert
  * @return 0 on success, -1 on error
  */
-int data_store_insert(data_store* ds, semantic_type type, const data_point* pt);
+int data_store_insert(data_store *ds, semantic_type type, const data_point *pt);
 
 /**
  * Query most recent value for a semantic type.
@@ -68,7 +69,7 @@ int data_store_insert(data_store* ds, semantic_type type, const data_point* pt);
  * @param out  Output data point
  * @return 0 if found, -1 if not found or error
  */
-int data_store_query_latest(data_store* ds, semantic_type type, data_point* out);
+int data_store_query_latest(data_store *ds, semantic_type type, data_point *out);
 
 /**
  * Query values in time range.
@@ -81,15 +82,15 @@ int data_store_query_latest(data_store* ds, semantic_type type, data_point* out)
  * @param count   Output count
  * @return 0 on success, -1 on error
  */
-int data_store_query_range(data_store* ds, semantic_type type, int64_t from_ts, int64_t to_ts,
-                           data_point** out, size_t* count);
+int data_store_query_range(data_store *ds, semantic_type type, int64_t from_ts, int64_t to_ts,
+                           data_point **out, size_t *count);
 
 /**
  * Free data points returned by query_range.
  *
  * @param pts Data points array
  */
-void data_store_free_points(data_point* pts);
+void data_store_free_points(data_point *pts);
 
 /* ============================================================
  * TIER 2: RAW EXTENSION DATA
@@ -105,8 +106,8 @@ void data_store_free_points(data_point* pts);
  * @param source_id    Plugin ID
  * @return 0 on success, -1 on error
  */
-int data_store_insert_raw(data_store* ds, const char* key, int64_t timestamp,
-                          const char* json_payload, const char* source_id);
+int data_store_insert_raw(data_store *ds, const char *key, int64_t timestamp,
+                          const char *json_payload, const char *source_id);
 
 /**
  * Query most recent raw data.
@@ -117,6 +118,6 @@ int data_store_insert_raw(data_store* ds, const char* key, int64_t timestamp,
  * @param ts_out   Output timestamp
  * @return 0 if found, -1 if not found or error
  */
-int data_store_query_raw_latest(data_store* ds, const char* key, char** json_out, int64_t* ts_out);
+int data_store_query_raw_latest(data_store *ds, const char *key, char **json_out, int64_t *ts_out);
 
 #endif /* HEIMWATT_DATA_STORE_H */

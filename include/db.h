@@ -82,14 +82,14 @@ typedef struct db_handle db_handle;
  * @note The path format may be backend-specific. For SQLite, this is a file path.
  *       For PostgreSQL, this would be a connection string.
  */
-int db_open(db_handle** db, const char* path);
+int db_open(db_handle **db, const char *path);
 
 /**
  * @brief Close database connection and free resources.
  *
  * @param[in,out] db Pointer to handle (set to NULL on return)
  */
-void db_close(db_handle** db);
+void db_close(db_handle **db);
 
 /**
  * @brief Get last error message.
@@ -100,7 +100,7 @@ void db_close(db_handle** db);
  * @param[in] db Database handle.
  * @return Error message string, or NULL if no error.
  */
-const char* db_error_message(const db_handle* db);
+const char *db_error_message(const db_handle *db);
 
 /* ============================================================================
  * Tier 1: Semantic Time-Series Data
@@ -121,8 +121,8 @@ const char* db_error_message(const db_handle* db);
  * @param source_id Plugin ID that reported this data.
  * @return 0 on success, error code on failure.
  */
-int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double value,
-                    const char* currency, const char* source_id);
+int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double value,
+                    const char *currency, const char *source_id);
 
 /**
  * @brief Query the most recent value for a semantic type.
@@ -133,7 +133,7 @@ int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double
  * @param[out] out_ts  Output timestamp.
  * @return 0 if found, DB_NOT_FOUND if no data, error code on failure.
  */
-int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val, int64_t* out_ts);
+int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, int64_t *out_ts);
 
 /**
  * @brief Query values in a time range.
@@ -147,8 +147,18 @@ int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val, in
  * @param[out] out_count    Number of results.
  * @return 0 on success (may return 0 results), error code on failure.
  */
-int db_query_range_tier1(db_handle* db, semantic_type type, int64_t from_ts, int64_t to_ts,
-                         double** out_values, int64_t** out_ts, size_t* out_count);
+int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int64_t to_ts,
+                         double **out_values, int64_t **out_ts, size_t *out_count);
+
+/**
+ * @brief Check if a Tier 1 data point already exists.
+ *
+ * @param db        Database handle.
+ * @param type      Semantic type ID.
+ * @param timestamp Unix timestamp.
+ * @return 1 if exists, 0 if not, negative error code on failure.
+ */
+int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t timestamp);
 
 /* ============================================================================
  * Tier 2: Raw Extension Data
@@ -168,8 +178,8 @@ int db_query_range_tier1(db_handle* db, semantic_type type, int64_t from_ts, int
  * @param source_id    Plugin ID.
  * @return 0 on success, error code on failure.
  */
-int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp, const char* json_payload,
-                    const char* source_id);
+int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const char *json_payload,
+                    const char *source_id);
 
 /**
  * @brief Query most recent Tier 2 data.
@@ -180,7 +190,7 @@ int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp, const cha
  * @param[out] out_ts   Output timestamp.
  * @return 0 if found, DB_NOT_FOUND if no data, error code on failure.
  */
-int db_query_latest_tier2(db_handle* db, const char* key, char** out_json, int64_t* out_ts);
+int db_query_latest_tier2(db_handle *db, const char *key, char **out_json, int64_t *out_ts);
 
 /* ============================================================================
  * Memory Management
@@ -193,7 +203,7 @@ int db_query_latest_tier2(db_handle* db, const char* key, char** out_json, int64
  *
  * @param ptr Pointer to free (NULL is safe).
  */
-void db_free(void* ptr);
+void db_free(void *ptr);
 
 /* ============================================================================
  * Maintenance
@@ -207,7 +217,7 @@ void db_free(void* ptr);
  * @param before_ts Delete records before this timestamp.
  * @return Number of records deleted, or negative error code.
  */
-int db_prune_tier1(db_handle* db, semantic_type type, int64_t before_ts);
+int db_prune_tier1(db_handle *db, semantic_type type, int64_t before_ts);
 
 /**
  * @brief Run database maintenance (vacuum, optimize, etc.).
@@ -215,6 +225,6 @@ int db_prune_tier1(db_handle* db, semantic_type type, int64_t before_ts);
  * @param db Database handle.
  * @return 0 on success, error code on failure.
  */
-int db_maintenance(db_handle* db);
+int db_maintenance(db_handle *db);
 
 #endif /* HEIMWATT_DB_H */

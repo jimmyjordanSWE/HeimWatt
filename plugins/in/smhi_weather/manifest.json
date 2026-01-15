@@ -2,11 +2,21 @@
   "type": "in",
   "id": "se.smhi.weather",
   "name": "SMHI Weather",
+  "resource": "SMHI Open API",
   "version": "0.1.0",
   "description": "Fetches current weather for Stockholm (or configured location) from SMHI Open API.",
   "provides": {
-    "known": ["ATMOSPHERE_TEMPERATURE"],
+    "known": [
+      "ATMOSPHERE_TEMPERATURE",
+      "ATMOSPHERE_HUMIDITY",
+      "ATMOSPHERE_WIND_SPEED"
+    ],
     "raw": []
+  },
+  "config": {
+    "url_forecast": "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/18.0686/lat/59.3293/data.json",
+    "url_history_temp": "https://opendata-download-metobs.smhi.se/api/version/1.0/parameter/1/station/98210/period/latest-months/data.json",
+    "url_history_humid": "https://opendata-download-metobs.smhi.se/api/version/1.0/parameter/6/station/98210/period/latest-months/data.json"
   },
   "schedule": {
     "interval_seconds": 3600

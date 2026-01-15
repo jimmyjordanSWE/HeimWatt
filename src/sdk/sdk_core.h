@@ -17,14 +17,16 @@
 /**
  * Internal plugin context structure.
  */
-struct plugin_ctx {
-    char* plugin_id;
-    ipc_client* ipc;
+struct plugin_ctx
+{
+    char *plugin_id;
+    ipc_client *ipc;
 
     /* Registered endpoints */
-    struct {
-        char* method;
-        char* path;
+    struct
+    {
+        char *method;
+        char *path;
         sdk_api_handler handler;
     } endpoints[32];
     size_t endpoint_count;
@@ -53,14 +55,14 @@ struct plugin_ctx {
  * @param argv Argument vector from main()
  * @return 0 on success, negative errno on error
  */
-int sdk_core_create(plugin_ctx** ctx, int argc, char** argv);
+int sdk_core_create(plugin_ctx **ctx, int argc, char **argv);
 
 /**
  * Destroy plugin context.
  *
  * @param ctx Pointer to context (set to NULL on return)
  */
-void sdk_core_destroy(plugin_ctx** ctx);
+void sdk_core_destroy(plugin_ctx **ctx);
 
 /**
  * Run plugin event loop.
@@ -68,6 +70,6 @@ void sdk_core_destroy(plugin_ctx** ctx);
  * @param ctx Plugin context
  * @return 0 on normal shutdown, negative errno on error
  */
-int sdk_core_run(plugin_ctx* ctx);
+int sdk_core_run(plugin_ctx *ctx);
 
 #endif  // HEIMWATT_SDK_CORE_H */

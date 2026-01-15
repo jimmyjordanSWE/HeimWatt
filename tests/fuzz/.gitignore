@@ -1,0 +1,2 @@
+# Fuzz output directory (gitignored)
+tests/fuzz/out/

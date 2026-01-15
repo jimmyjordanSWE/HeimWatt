@@ -17,7 +17,7 @@
  * @param size Bytes to allocate
  * @return Allocated memory (never NULL)
  */
-void* mem_alloc(size_t size);
+void *mem_alloc(size_t size);
 
 /**
  * Allocate zeroed memory, exits on failure.
@@ -26,7 +26,7 @@ void* mem_alloc(size_t size);
  * @param size  Size of each element
  * @return Allocated memory (never NULL)
  */
-void* mem_calloc(size_t count, size_t size);
+void *mem_calloc(size_t count, size_t size);
 
 /**
  * Reallocate memory, exits on failure.
@@ -35,7 +35,7 @@ void* mem_calloc(size_t count, size_t size);
  * @param size New size
  * @return Reallocated memory (never NULL)
  */
-void* mem_realloc(void* ptr, size_t size);
+void *mem_realloc(void *ptr, size_t size);
 
 /**
  * Duplicate a string, exits on failure.
@@ -43,13 +43,13 @@ void* mem_realloc(void* ptr, size_t size);
  * @param str String to duplicate
  * @return Duplicated string (never NULL)
  */
-char* mem_strdup(const char* str);
+char *mem_strdup(const char *str);
 
 /**
  * Free memory (safe with NULL).
  *
  * @param ptr Memory to free (can be NULL)
  */
-void mem_free(void* ptr);
+void mem_free(void *ptr);
 
 #endif /* HEIMWATT_MEM_H */

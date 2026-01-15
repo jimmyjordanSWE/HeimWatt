@@ -8,8 +8,10 @@
 
 // --- Safe Memory Macros ---
 #define SAFE_FREE(ptr)    \
-    do {                  \
-        if ((ptr)) {      \
+    do                    \
+    {                     \
+        if ((ptr))        \
+        {                 \
             free((ptr));  \
             (ptr) = NULL; \
         }                 \
@@ -21,7 +23,8 @@
  * @param ptr Pointer variable to allocate.
  */
 #define SAFE_ALLOC(ptr)                              \
-    do {                                             \
+    do                                               \
+    {                                                \
         (ptr) = malloc(sizeof(*(ptr)));              \
         if ((ptr)) memset((ptr), 0, sizeof(*(ptr))); \
     } while (0)
@@ -34,7 +37,8 @@
  * @param ... Arguments.
  */
 #define PANIC(fmt, ...)                                                                 \
-    do {                                                                                \
+    do                                                                                  \
+    {                                                                                   \
         fprintf(stderr, "[PANIC] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
         exit(EXIT_FAILURE);                                                             \
     } while (0)
@@ -50,7 +54,7 @@
  * @param buf Buffer to write to.
  * @param size Buffer size.
  */
-void get_time_str(time_t t, char* buf, size_t size);
+void get_time_str(time_t t, char *buf, size_t size);
 
 // --- Signal Handling ---
 

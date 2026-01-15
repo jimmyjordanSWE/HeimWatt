@@ -29,8 +29,8 @@
  * @param source_id Plugin ID
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_insert_tier1(db_conn* conn, semantic_type type, int64_t timestamp, double value,
-                       const char* currency, const char* source_id);
+int query_insert_tier1(db_conn *conn, semantic_type type, int64_t timestamp, double value,
+                       const char *currency, const char *source_id);
 
 /**
  * Get most recent value for a semantic type.
@@ -43,8 +43,8 @@ int query_insert_tier1(db_conn* conn, semantic_type type, int64_t timestamp, dou
  * @param out_source   Output source buffer (min 256 bytes)
  * @return DB_OK if found, DB_DONE if no data, DB_ERROR on error
  */
-int query_select_latest_tier1(db_conn* conn, semantic_type type, double* out_value,
-                              int64_t* out_timestamp, char* out_currency, char* out_source);
+int query_select_latest_tier1(db_conn *conn, semantic_type type, double *out_value,
+                              int64_t *out_timestamp, char *out_currency, char *out_source);
 
 /**
  * Get values in time range.
@@ -60,14 +60,14 @@ int query_select_latest_tier1(db_conn* conn, semantic_type type, double* out_val
  * @param out_count      Output count
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_select_range_tier1(db_conn* conn, semantic_type type, int64_t from_ts, int64_t to_ts,
-                             double** out_values, int64_t** out_timestamps, char*** out_currencies,
-                             size_t* out_count);
+int query_select_range_tier1(db_conn *conn, semantic_type type, int64_t from_ts, int64_t to_ts,
+                             double **out_values, int64_t **out_timestamps, char ***out_currencies,
+                             size_t *out_count);
 
 /**
  * Free range query results.
  */
-void query_free_range_tier1(double* values, int64_t* timestamps, char** currencies, size_t count);
+void query_free_range_tier1(double *values, int64_t *timestamps, char **currencies, size_t count);
 
 /**
  * Get distinct sources for a semantic type.
@@ -78,8 +78,8 @@ void query_free_range_tier1(double* values, int64_t* timestamps, char** currenci
  * @param out_count   Output count
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_select_sources_tier1(db_conn* conn, semantic_type type, char*** out_sources,
-                               size_t* out_count);
+int query_select_sources_tier1(db_conn *conn, semantic_type type, char ***out_sources,
+                               size_t *out_count);
 
 /**
  * Delete old data (before timestamp).
@@ -89,7 +89,7 @@ int query_select_sources_tier1(db_conn* conn, semantic_type type, char*** out_so
  * @param before_ts Delete records before this timestamp
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_delete_before_tier1(db_conn* conn, semantic_type type, int64_t before_ts);
+int query_delete_before_tier1(db_conn *conn, semantic_type type, int64_t before_ts);
 
 /* ============================================================
  * TIER 2: RAW EXTENSION DATA
@@ -105,8 +105,8 @@ int query_delete_before_tier1(db_conn* conn, semantic_type type, int64_t before_
  * @param source_id    Plugin ID
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_insert_tier2(db_conn* conn, const char* key, int64_t timestamp, const char* json_payload,
-                       const char* source_id);
+int query_insert_tier2(db_conn *conn, const char *key, int64_t timestamp, const char *json_payload,
+                       const char *source_id);
 
 /**
  * Get most recent raw data.
@@ -118,8 +118,8 @@ int query_insert_tier2(db_conn* conn, const char* key, int64_t timestamp, const 
  * @param out_timestamp Output timestamp
  * @return DB_OK if found, DB_DONE if not found, DB_ERROR on error
  */
-int query_select_latest_tier2(db_conn* conn, const char* key, char** out_json,
-                              int64_t* out_timestamp);
+int query_select_latest_tier2(db_conn *conn, const char *key, char **out_json,
+                              int64_t *out_timestamp);
 
 /**
  * Get raw data in time range.
@@ -133,13 +133,13 @@ int query_select_latest_tier2(db_conn* conn, const char* key, char** out_json,
  * @param out_count      Output count
  * @return DB_OK on success, DB_ERROR on failure
  */
-int query_select_range_tier2(db_conn* conn, const char* key, int64_t from_ts, int64_t to_ts,
-                             char*** out_json, int64_t** out_timestamps, size_t* out_count);
+int query_select_range_tier2(db_conn *conn, const char *key, int64_t from_ts, int64_t to_ts,
+                             char ***out_json, int64_t **out_timestamps, size_t *out_count);
 
 /**
  * Free range query results.
  */
-void query_free_range_tier2(char** json, int64_t* timestamps, size_t count);
+void query_free_range_tier2(char **json, int64_t *timestamps, size_t count);
 
 /* ============================================================
  * AGGREGATION
@@ -148,18 +148,18 @@ void query_free_range_tier2(char** json, int64_t* timestamps, size_t count);
 /**
  * Get count of records for a semantic type.
  */
-int query_count_tier1(db_conn* conn, semantic_type type, size_t* out_count);
+int query_count_tier1(db_conn *conn, semantic_type type, size_t *out_count);
 
 /**
  * Get time range bounds.
  */
-int query_time_bounds_tier1(db_conn* conn, semantic_type type, int64_t* out_min_ts,
-                            int64_t* out_max_ts);
+int query_time_bounds_tier1(db_conn *conn, semantic_type type, int64_t *out_min_ts,
+                            int64_t *out_max_ts);
 
 /**
  * Get average value in range.
  */
-int query_avg_tier1(db_conn* conn, semantic_type type, int64_t from_ts, int64_t to_ts,
-                    double* out_avg);
+int query_avg_tier1(db_conn *conn, semantic_type type, int64_t from_ts, int64_t to_ts,
+                    double *out_avg);
 
 #endif /* HEIMWATT_QUERIES_H */

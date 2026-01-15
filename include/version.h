@@ -72,7 +72,8 @@
  * @param compiled_version The SDK version the plugin was compiled with.
  * @return 0 if compatible, -1 if major version mismatch.
  */
-static inline int heimwatt_check_version(int compiled_version) {
+static inline int heimwatt_check_version(int compiled_version)
+{
     int compiled_major = (compiled_version >> 16) & 0xFF;
     int runtime_major = HEIMWATT_VERSION_MAJOR;
     return (compiled_major == runtime_major) ? 0 : -1;

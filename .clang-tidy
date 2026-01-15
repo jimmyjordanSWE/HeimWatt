@@ -1,6 +1,41 @@
 ---
-Checks:          'clang-diagnostic-*,readability-*,bugprone-*,cert-*,performance-*'
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  -cert-err33-c,
+  -cert-err34-c,
+  -bugprone-unused-return-value,
+  -bugprone-posix-return,
+  -bugprone-narrowing-conversions,
+  -bugprone-easily-swappable-parameters,
+  -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -readability-braces-around-statements,
+  -google-readability-braces-around-statements,
+  -readability-magic-numbers,
+  readability-identifier-naming
 WarningsAsErrors: ''
-HeaderFilterRegex: 'src/.*'
+HeaderFilterRegex: '^(src|include)/.*'
 FormatStyle:     file
+CheckOptions:
+  - key:             readability-identifier-naming.TypedefCase
+    value:           lower_case
+  - key:             readability-identifier-naming.StructCase
+    value:           lower_case
+  - key:             readability-identifier-naming.EnumCase
+    value:           lower_case
+  - key:             readability-identifier-naming.EnumConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.FunctionCase
+    value:           lower_case
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.ParameterCase
+    value:           lower_case
+  - key:             readability-function-cognitive-complexity.Threshold
+    value:           30
 ...

@@ -23,14 +23,14 @@ typedef struct http_client http_client;
  * @param client Output pointer for client
  * @return 0 on success, -1 on error
  */
-int http_client_create(http_client** client);
+int http_client_create(http_client **client);
 
 /**
  * Destroy HTTP client.
  *
  * @param client Pointer to client (set to NULL on return)
  */
-void http_client_destroy(http_client** client);
+void http_client_destroy(http_client **client);
 
 /* ============================================================
  * CONFIGURATION
@@ -42,7 +42,7 @@ void http_client_destroy(http_client** client);
  * @param client     HTTP client
  * @param timeout_ms Timeout in milliseconds
  */
-void http_client_set_timeout(http_client* client, int timeout_ms);
+void http_client_set_timeout(http_client *client, int timeout_ms);
 
 /**
  * Set a default header for all requests.
@@ -51,14 +51,14 @@ void http_client_set_timeout(http_client* client, int timeout_ms);
  * @param name   Header name
  * @param value  Header value
  */
-void http_client_set_header(http_client* client, const char* name, const char* value);
+void http_client_set_header(http_client *client, const char *name, const char *value);
 
 /**
  * Clear all default headers.
  *
  * @param client HTTP client
  */
-void http_client_clear_headers(http_client* client);
+void http_client_clear_headers(http_client *client);
 
 /* ============================================================
  * REQUESTS (blocking)
@@ -73,7 +73,7 @@ void http_client_clear_headers(http_client* client);
  * @param len_out  Output response length
  * @return HTTP status code, or -1 on error
  */
-int http_get(http_client* client, const char* url, char** body_out, size_t* len_out);
+int http_get(http_client *client, const char *url, char **body_out, size_t *len_out);
 
 /**
  * Perform HTTP POST with JSON body.
@@ -85,8 +85,8 @@ int http_get(http_client* client, const char* url, char** body_out, size_t* len_
  * @param len_out      Output response length
  * @return HTTP status code, or -1 on error
  */
-int http_post_json(http_client* client, const char* url, const char* json_body, char** response_out,
-                   size_t* len_out);
+int http_post_json(http_client *client, const char *url, const char *json_body, char **response_out,
+                   size_t *len_out);
 
 /**
  * Perform HTTP POST with form data.
@@ -98,7 +98,7 @@ int http_post_json(http_client* client, const char* url, const char* json_body, 
  * @param len_out      Output response length
  * @return HTTP status code, or -1 on error
  */
-int http_post_form(http_client* client, const char* url, const char* form_data, char** response_out,
-                   size_t* len_out);
+int http_post_form(http_client *client, const char *url, const char *form_data, char **response_out,
+                   size_t *len_out);
 
 #endif /* HEIMWATT_HTTP_CLIENT_H */

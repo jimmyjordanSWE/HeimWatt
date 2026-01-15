@@ -20,14 +20,14 @@ typedef struct ipc_client ipc_client;
  * @param socket_path Path to Unix socket
  * @return 0 on success, negative errno on error
  */
-int ipc_client_create(ipc_client** client, const char* socket_path);
+int ipc_client_create(ipc_client **client, const char *socket_path);
 
 /**
  * Destroy IPC client and disconnect from Core.
  *
  * @param client Pointer to client (set to NULL on return)
  */
-void ipc_client_destroy(ipc_client** client);
+void ipc_client_destroy(ipc_client **client);
 
 /**
  * Send message (blocks until sent).
@@ -37,7 +37,7 @@ void ipc_client_destroy(ipc_client** client);
  * @param len    Message length
  * @return 0 on success, negative errno on error
  */
-int ipc_client_send(ipc_client* client, const char* msg, size_t len);
+int ipc_client_send(ipc_client *client, const char *msg, size_t len);
 
 /**
  * Receive message (blocks until received or timeout).
@@ -49,7 +49,7 @@ int ipc_client_send(ipc_client* client, const char* msg, size_t len);
  * @param timeout_ms Timeout in milliseconds (-1 = forever)
  * @return 0 on success, negative errno on error/timeout
  */
-int ipc_client_recv(ipc_client* client, char** msg, size_t* len, int timeout_ms);
+int ipc_client_recv(ipc_client *client, char **msg, size_t *len, int timeout_ms);
 
 /**
  * Get file descriptor (for poll/select).
@@ -57,6 +57,6 @@ int ipc_client_recv(ipc_client* client, char** msg, size_t* len, int timeout_ms)
  * @param client Client
  * @return File descriptor
  */
-int ipc_client_fd(const ipc_client* client);
+int ipc_client_fd(const ipc_client *client);
 
 #endif  // HEIMWATT_SDK_IPC_H */
