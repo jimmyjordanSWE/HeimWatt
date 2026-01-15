@@ -5,8 +5,8 @@
  * Internal query functions.
  */
 
-#ifndef SDK_QUERY_H
-#define SDK_QUERY_H
+#ifndef HEIMWATT_SDK_QUERY_H
+#define HEIMWATT_SDK_QUERY_H
 
 #include <errno.h>
 #include <stddef.h>
@@ -37,4 +37,4 @@ int sdk_query_send_latest(plugin_ctx* ctx, semantic_type type, sdk_data_point* o
 int sdk_query_send_range(plugin_ctx* ctx, semantic_type type, int64_t from_ts, int64_t to_ts,
                          sdk_data_point** out, size_t* count);
 
-#endif /* SDK_QUERY_H */
+#endif  // HEIMWATT_SDK_QUERY_H */

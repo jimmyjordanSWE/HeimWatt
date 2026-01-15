@@ -1,0 +1,14 @@
+{
+  "type": "in",
+  "id": "se.smhi.weather",
+  "name": "SMHI Weather",
+  "version": "0.1.0",
+  "description": "Fetches current weather for Stockholm (or configured location) from SMHI Open API.",
+  "provides": {
+    "known": ["ATMOSPHERE_TEMPERATURE"],
+    "raw": []
+  },
+  "schedule": {
+    "interval_seconds": 3600
+  }
+}

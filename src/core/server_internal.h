@@ -1,5 +1,5 @@
-#ifndef SERVER_INTERNAL_H
-#define SERVER_INTERNAL_H
+#ifndef HEIMWATT_SERVER_INTERNAL_H
+#define HEIMWATT_SERVER_INTERNAL_H
 
 #include <pthread.h>
 
@@ -25,4 +25,4 @@ struct server_ctx {
     time_t next_price_fetch;                    // Scheduled fetch time
 };
 
-#endif  // SERVER_INTERNAL_H
+#endif  // HEIMWATT_SERVER_INTERNAL_H

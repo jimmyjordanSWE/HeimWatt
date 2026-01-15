@@ -5,8 +5,8 @@
  * Internal functions for metric reporting.
  */
 
-#ifndef SDK_REPORT_H
-#define SDK_REPORT_H
+#ifndef HEIMWATT_SDK_REPORT_H
+#define HEIMWATT_SDK_REPORT_H
 
 #include <errno.h>
 #include <stddef.h>
@@ -29,4 +29,4 @@ int sdk_metric_validate(const sdk_metric* m);
  */
 char* sdk_metric_to_json(const sdk_metric* m);
 
-#endif /* SDK_REPORT_H */
+#endif  // HEIMWATT_SDK_REPORT_H */

@@ -5,8 +5,8 @@
  * Internal context structure and lifecycle functions.
  */
 
-#ifndef SDK_CORE_H
-#define SDK_CORE_H
+#ifndef HEIMWATT_SDK_CORE_H
+#define HEIMWATT_SDK_CORE_H
 
 #include <errno.h>
 #include <stddef.h>
@@ -70,4 +70,4 @@ void sdk_core_destroy(plugin_ctx** ctx);
  */
 int sdk_core_run(plugin_ctx* ctx);
 
-#endif /* SDK_CORE_H */
+#endif  // HEIMWATT_SDK_CORE_H */

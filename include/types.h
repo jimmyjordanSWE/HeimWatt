@@ -1,5 +1,5 @@
-#ifndef TYPES_H
-#define TYPES_H
+#ifndef HEIMWATT_TYPES_H
+#define HEIMWATT_TYPES_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -18,4 +18,4 @@ enum {
  */
 typedef enum { LOG_LEVEL_DEBUG = 0, LOG_LEVEL_INFO, LOG_LEVEL_WARN, LOG_LEVEL_ERROR } log_level;
 
-#endif  // TYPES_H
+#endif  // HEIMWATT_TYPES_H

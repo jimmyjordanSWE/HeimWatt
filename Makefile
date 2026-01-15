@@ -1,6 +1,6 @@
 CC = gcc
 # Common Flags
-CFLAGS_COMMON = -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I libs -I include -I .
+CFLAGS_COMMON = -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I libs -I include -I src -I .
 
 # Debug Flags (Default): ASAN, UBSAN, Debug Info
 CFLAGS_DEBUG = $(CFLAGS_COMMON) -g -fsanitize=address,undefined -fno-omit-frame-pointer
@@ -140,3 +140,33 @@ clean_objs:
 
 clean:
 	rm -rf $(BUILD_DIR) leop.db
+
+# --- SDK Build ---
+
+SDK_SRC = src/sdk/lifecycle.c src/sdk/scheduler.c src/sdk/ipc.c \
+          src/sdk/report.c src/sdk/config.c src/sdk/http.c \
+          src/sdk/json.c src/sdk/state.c \
+          src/net/http_client.c src/net/json.c \
+          libs/cJSON.c
+
+SDK_OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SDK_SRC))
+
+sdk: CFLAGS = $(CFLAGS_DEBUG)
+sdk: $(SDK_OBJ)
+	@echo ">> Creating SDK Static Library..."
+	@mkdir -p $(BUILD_DIR)/lib
+	ar rcs $(BUILD_DIR)/lib/libheimwatt_sdk.a $(SDK_OBJ)
+	@echo ">> SDK Built at $(BUILD_DIR)/lib/libheimwatt_sdk.a"
+
+# --- Plugins Build ---
+
+SMHI_BIN = $(BIN_DIR)/plugins/smhi_weather
+
+smhi: CFLAGS = $(CFLAGS_DEBUG)
+smhi: LDFLAGS = $(LDFLAGS_DEBUG)
+smhi: sdk $(SMHI_BIN)
+	@echo ">> SMHI Plugin Built at $(SMHI_BIN)"
+
+$(SMHI_BIN): plugins/in/smhi_weather/main.c $(BUILD_DIR)/lib/libheimwatt_sdk.a
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR)/lib -lheimwatt_sdk $(LDFLAGS)

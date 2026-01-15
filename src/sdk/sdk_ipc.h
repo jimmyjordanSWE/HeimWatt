@@ -5,8 +5,8 @@
  * IPC client for plugin-to-Core communication.
  */
 
-#ifndef SDK_IPC_H
-#define SDK_IPC_H
+#ifndef HEIMWATT_SDK_IPC_H
+#define HEIMWATT_SDK_IPC_H
 
 #include <errno.h>
 #include <stddef.h>
@@ -59,4 +59,4 @@ int ipc_client_recv(ipc_client* client, char** msg, size_t* len, int timeout_ms)
  */
 int ipc_client_fd(const ipc_client* client);
 
-#endif /* SDK_IPC_H */
+#endif  // HEIMWATT_SDK_IPC_H */

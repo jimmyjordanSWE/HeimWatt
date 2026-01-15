@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef HEIMWATT_UTILS_H
+#define HEIMWATT_UTILS_H
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -70,4 +70,4 @@ bool is_shutdown_requested(void);
  */
 void request_shutdown(void);
 
-#endif  // UTILS_H
+#endif  // HEIMWATT_UTILS_H

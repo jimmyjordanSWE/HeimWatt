@@ -6,19 +6,50 @@ HeimWatt is a modular broker that ingests data from **IN plugins** (weather, pri
 
 ## Status
 
-🔄 **Design Phase** — Architecture defined, implementation in progress.
-
+🔄 **Design Phase**
 | Component | Status |
 |-----------|--------|
 | Architecture | ✅ Complete |
 | Module APIs | 🔄 In Progress |
-| Core Implementation | ⏳ Planned |
+| Core Implementation |⏳ Planned |
 | IN Plugins | ⏳ Planned |
 | OUT Plugins | ⏳ Planned |
 | Web UI | ⏳ Future |
 
+---
+
+## Tech Stack
+
+| Component | Choice |
+|-----------|--------|
+| Language | C99 |
+| Compiler | Clang |
+| Build | Makefile |
+| Target | Linux (POSIX) |
+
+| Library | Purpose |
+|---------|---------|
+| cJSON | JSON parsing |
+| SQLite | Database |
+| libcurl | HTTP client |
+
+---
+
+## Quick Start
+
+```bash
+# Build
+make
+
+# Run
+./build/heimwatt
+
+# Run with debug
+make debug && ./build/heimwatt
+```
+
+---
+
 ## License
 
 Proprietary. See [LICENSE](LICENSE).
-
-

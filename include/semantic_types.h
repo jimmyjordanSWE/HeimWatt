@@ -1,10 +1,6 @@
 #ifndef HEIMWATT_SEMANTIC_TYPES_H
 #define HEIMWATT_SEMANTIC_TYPES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // X-Macro for Semantic Types
 // Format: X(ENUM_SUFFIX, ID_STRING, UNIT_STRING, DESC_STRING)
 #define HEIMWATT_SEMANTIC_TYPES(X)                                                                 \
@@ -171,9 +167,5 @@ const semantic_meta* semantic_get_meta(semantic_type type);
 
 // Helper: Get enum from ID string (O(N) or specialized lookup)
 semantic_type semantic_from_string(const char* id);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif  // HEIMWATT_SEMANTIC_TYPES_H

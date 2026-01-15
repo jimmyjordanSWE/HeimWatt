@@ -5,8 +5,8 @@
  * Internal endpoint registration and dispatch functions.
  */
 
-#ifndef SDK_ENDPOINT_H
-#define SDK_ENDPOINT_H
+#ifndef HEIMWATT_SDK_ENDPOINT_H
+#define HEIMWATT_SDK_ENDPOINT_H
 
 #include <errno.h>
 
@@ -31,4 +31,4 @@ int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path)
  */
 int sdk_endpoint_dispatch(plugin_ctx* ctx, const char* request_json);
 
-#endif /* SDK_ENDPOINT_H */
+#endif  // HEIMWATT_SDK_ENDPOINT_H */
