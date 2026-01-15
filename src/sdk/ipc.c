@@ -48,3 +48,24 @@ int sdk_ipc_recv(plugin_ctx* ctx, char* buf, size_t len) {
     buf[received] = 0;
     return 0;
 }
+
+#include <string.h>
+
+bool sdk_ipc_check_data(plugin_ctx* ctx, int64_t ts) {
+    if (!ctx) return false;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "{\"cmd\":\"check_data\", \"ts\":%ld}", ts);
+
+    if (sdk_ipc_send(ctx, buf) < 0) return false;
+
+    char resp[256];
+    if (sdk_ipc_recv(ctx, resp, sizeof(resp)) < 0) return false;
+
+    // Expect {"exists": true/false}
+    if (strstr(resp, "\"exists\":true") || strstr(resp, "\"exists\": true")) {
+        return true;
+    }
+
+    return false;
+}

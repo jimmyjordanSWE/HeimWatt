@@ -122,7 +122,7 @@ const char* db_error_message(const db_handle* db);
  * @return 0 on success, error code on failure.
  */
 int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double value,
-                          const char* currency, const char* source_id);
+                    const char* currency, const char* source_id);
 
 /**
  * @brief Query the most recent value for a semantic type.
@@ -133,8 +133,7 @@ int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double
  * @param[out] out_ts  Output timestamp.
  * @return 0 if found, DB_NOT_FOUND if no data, error code on failure.
  */
-int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val,
-                                int64_t* out_ts);
+int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val, int64_t* out_ts);
 
 /**
  * @brief Query values in a time range.
@@ -149,7 +148,7 @@ int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val,
  * @return 0 on success (may return 0 results), error code on failure.
  */
 int db_query_range_tier1(db_handle* db, semantic_type type, int64_t from_ts, int64_t to_ts,
-                               double** out_values, int64_t** out_ts, size_t* out_count);
+                         double** out_values, int64_t** out_ts, size_t* out_count);
 
 /* ============================================================================
  * Tier 2: Raw Extension Data
@@ -169,8 +168,8 @@ int db_query_range_tier1(db_handle* db, semantic_type type, int64_t from_ts, int
  * @param source_id    Plugin ID.
  * @return 0 on success, error code on failure.
  */
-int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp,
-                          const char* json_payload, const char* source_id);
+int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp, const char* json_payload,
+                    const char* source_id);
 
 /**
  * @brief Query most recent Tier 2 data.

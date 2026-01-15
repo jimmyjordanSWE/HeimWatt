@@ -51,11 +51,18 @@ struct plugin_ctx {
 
     // State
     bool running;
+
+    // History / Backfill
+    int64_t history_start_ts;
+    int64_t current_tick_time;  // Context for {date} substitution
+    bool in_backfill_mode;
+    int backfill_delay_ms;
 };
 
 // Internal helpers
 int sdk_ipc_connect(plugin_ctx* ctx);
 int sdk_ipc_send(plugin_ctx* ctx, const char* json_msg);
 int sdk_ipc_recv(plugin_ctx* ctx, char* buf, size_t len);
+bool sdk_ipc_check_data(plugin_ctx* ctx, int64_t ts);
 
 #endif

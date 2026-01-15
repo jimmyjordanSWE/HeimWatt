@@ -93,7 +93,72 @@ int sdk_run(plugin_ctx* ctx) {
         return -1;
     }
 
+    // --- History Configuration ---
+    ctx->in_backfill_mode = false;
+    ctx->backfill_delay_ms = 1000;  // Default: 1 second safe delay
+
+    char* hist_val = NULL;
+    if (sdk_get_config(ctx, "history_days", &hist_val) == 0 && hist_val) {
+        int days = atoi(hist_val);
+        free(hist_val);
+
+        if (days > 0) {
+            ctx->history_start_ts = time(NULL) - (days * 86400);
+            ctx->in_backfill_mode = true;
+
+            // Check for rate limit override
+            char* rate_val = NULL;
+            if (sdk_get_config(ctx, "history_rate_limit_ms", &rate_val) == 0 && rate_val) {
+                ctx->backfill_delay_ms = atoi(rate_val);
+                if (ctx->backfill_delay_ms < 100) ctx->backfill_delay_ms = 100;  // Minimum safety
+                free(rate_val);
+            }
+        }
+    }
+
     ctx->running = true;
+
+    // --- Backfill Loop ---
+    if (ctx->in_backfill_mode) {
+        int64_t now = time(NULL);
+        int64_t iter = ctx->history_start_ts;
+
+        // Determine step size. Use smallest ticker interval or default 1h.
+        int64_t step = 3600;
+        if (ctx->ticker_count > 0) {
+            // Find smallest interval
+            // TODO: Cron support? For now just use interval_sec if >0
+            // Assuming at least one interval ticker for simplicity of MVP backfill
+            for (int i = 0; i < ctx->ticker_count; i++) {
+                if (!ctx->tickers[i].is_cron && ctx->tickers[i].interval_sec > 0) {
+                    if (ctx->tickers[i].interval_sec < step) step = ctx->tickers[i].interval_sec;
+                }
+            }
+        }
+
+        sdk_log(ctx, SDK_LOG_INFO, "Starting history backfill from %ld (step %ld s)", iter, step);
+
+        while (iter < now) {
+            // Check Core DB
+            if (!sdk_ipc_check_data(ctx, iter)) {
+                // Data missing, fetch it
+                ctx->current_tick_time = iter;
+
+                for (int i = 0; i < ctx->ticker_count; i++) {
+                    ctx->tickers[i].handler(ctx, iter);
+                }
+
+                // Rate Limit
+                usleep(ctx->backfill_delay_ms * 1000);
+            }
+
+            iter += step;
+        }
+
+        sdk_log(ctx, SDK_LOG_INFO, "Backfill complete. Entering realtime mode.");
+        ctx->in_backfill_mode = false;
+        ctx->current_tick_time = 0;
+    }
 
     // Main loop
     while (ctx->running) {

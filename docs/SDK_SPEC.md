@@ -41,6 +41,21 @@ void sdk_destroy(plugin_ctx** ctx_ptr);
 int sdk_get_config(plugin_ctx* ctx, const char* key, char** value);
 ```
 
+### 4.2.1 Advanced Configuration & History
+The SDK recognizes specific variable names in the manifest for advanced control:
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `history_days` | Number of days to backfill on startup. If >0, SDK enters backfill mode. | 0 (disabled) |
+| `history_rate_limit_ms` | Delay between backfill steps to prevent rate-limiting. | 1000 ms |
+
+**Variable Substitution**:
+During backfill, `sdk_get_config` automatically replaces placeholders in returned values:
+- `{date}` -> `YYYY-MM-DD` (e.g., "2024-01-01")
+- `{iso}` -> `YYYY-MM-DDTHH:MM:SSZ` (ISO8601)
+
+This allows plugins to use dynamic URLs for history fetching without code changes. e.g. `url: "https://api.com/history?day={date}"`
+
 ### 4.3 Scheduling
 
 #### Interval (relative to start)
