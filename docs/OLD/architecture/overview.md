@@ -20,7 +20,7 @@
 | Decision | Resolution |
 |----------|------------|
 | Data normalization | Plugins send data in canonical SI units. SDK validates, does not convert. |
-| Plugin architecture | Two types: **IN Plugins** (ingest) and **OUT Plugins** (compute + serve) |
+| Plugin architecture | Two types: **IN Plugins** (ingest) and **OUT Plugins** (compute + serve via cores API) |
 | Core responsibility | Pure data broker: store, index, route. No domain logic. |
 | Extensibility | Tier 1 (known semantic types) + Tier 2 (raw extension data) |
 | Currency handling | Value + currency code string. No conversion. Client displays. |
@@ -66,95 +66,6 @@ flowchart TB
     OutPlugins -->|IPC: QUERY| IPC
     Clients --> GW
 ```
-
----
-
-## Source Tree
-
-```
-heimwatt/
-├── include/                        # Public API headers
-│   ├── types.h                     # Core typedefs, forward decls
-│   ├── semantic_types.h            # Semantic type enum + metadata
-│   └── heimwatt_sdk.h              # Plugin SDK (shipped to plugin devs)
-│
-├── src/
-│   ├── main.c                      # Entry point only
-│   │
-│   ├── core/                       # Central broker
-│   │   ├── core.h / core.c         # Lifecycle, orchestration
-│   │   ├── config.h / config.c     # Configuration parsing
-│   │   ├── plugin_mgr.h / plugin_mgr.c   # Plugin discovery, fork, supervise
-│   │   ├── data_store.h / data_store.c   # Semantic data storage
-│   │   ├── router.h / router.c           # HTTP → plugin dispatch
-│   │   └── ipc.h / ipc.c                 # Core-side IPC
-│   │
-│   ├── net/                        # Network stack (to TCP)
-│   │   ├── tcp.h / tcp.c           # Raw socket ops
-│   │   ├── http_parse.h / http_parse.c   # HTTP request/response parsing
-│   │   ├── http_server.h / http_server.c # HTTP server (accept loop)
-│   │   └── json.h / json.c               # JSON encode/decode
-│   │
-│   ├── db/                         # Database layer
-│   │   ├── sqlite.h / sqlite.c     # Connection wrapper
-│   │   ├── schema.h / schema.c     # Table creation/migration
-│   │   └── queries.h / queries.c   # Prepared statements
-│   │
-│   ├── sdk/                        # SDK implementation (libheimwatt-sdk.so)
-│   │   ├── sdk_core.h / sdk_core.c       # Plugin context lifecycle
-│   │   ├── sdk_report.h / sdk_report.c   # Data reporting (builder)
-│   │   ├── sdk_query.h / sdk_query.c     # Query API
-│   │   ├── sdk_endpoint.h / sdk_endpoint.c # Endpoint registration
-│   │   └── sdk_ipc.h / sdk_ipc.c         # Plugin-side IPC
-│   │
-│   └── util/                       # Shared utilities
-│       ├── log.h / log.c           # Logging
-│       ├── time_util.h / time_util.c     # Timestamp helpers
-│       ├── signal_util.h / signal_util.c # Signal handling
-│       └── mem.h / mem.c                 # Allocation helpers
-│
-├── plugins/
-│   ├── in/                         # IN Plugins (data ingest)
-│   │   ├── smhi/
-│   │   ├── elpriset/
-│   │   └── openmeteo/
-│   │
-│   └── out/                        # OUT Plugins (compute + serve)
-│       └── energy_strategy/        # 48h optimal energy strategy + LPS solver
-│
-├── libs/                           # Vendored third-party libraries
-│   ├── cJSON/                      # JSON parsing
-│   ├── sqlite3/                    # SQLite database engine
-│   └── curl/                       # HTTP client (for plugins)
-│
-├── webui/                          # Web UI (React, future)
-│   ├── public/
-│   ├── src/
-│   └── package.json
-│
-├── config/                         # Runtime configuration
-│   ├── heimwatt.json               # Main config file
-│   └── plugins.d/                  # Per-plugin config overrides
-│
-├── data/                           # Runtime data
-│   ├── heimwatt.db                 # SQLite database
-│   └── cache/                      # Plugin cache files
-│
-├── logs/                           # Log files
-│   ├── heimwatt.log                # Main log
-│   └── plugins/                    # Per-plugin logs
-│
-├── var/                            # Runtime state
-│   └── heimwatt.sock               # IPC socket
-│
-└── docs/design/modules/
-    ├── core/design.md
-    ├── plugins/design.md
-    ├── net/design.md
-    ├── db/design.md
-    └── sdk/design.md
-```
-
 ---
 
 ## Plugin Types
