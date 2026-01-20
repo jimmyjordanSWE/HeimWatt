@@ -1,3 +1,10 @@
+/**
+ * @file csv_backend.c
+ * @brief CSV storage backend implementation
+ *
+ * "Wide" CSV format: Timestamp + One column per semantic type
+ */
+
 #include <errno.h>
 #include <math.h>
 #include <stdbool.h>
@@ -8,24 +15,32 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "db.h"
+#include "db_backend.h"
 #include "log.h"
+#include "memory.h"
 #include "semantic_types.h"
 
-// "Wide" CSV: Timestamp + One column per semantic type
-struct db_handle
+/* ============================================================================
+ * Internal Context
+ * ============================================================================ */
+
+typedef struct csv_ctx
 {
     FILE *fp;
     char path[256];
 
-    // In-memory buffer of latest known values (Tier 1)
+    /* In-memory buffer of latest known values (Tier 1) */
     double values[SEM_TYPE_COUNT];
-    int64_t last_ts[SEM_TYPE_COUNT];  // Helper for EEXIST and query_latest
+    int64_t last_ts[SEM_TYPE_COUNT];
     bool has_value[SEM_TYPE_COUNT];
 
     int interval_sec;
     time_t last_flush;
-};
+} csv_ctx;
+
+/* ============================================================================
+ * Helpers
+ * ============================================================================ */
 
 static time_t parse_iso(const char *s)
 {
@@ -35,7 +50,6 @@ static time_t parse_iso(const char *s)
     return mktime(&tm);
 }
 
-// Generate header string
 static void write_header(FILE *fp)
 {
     fprintf(fp, "timestamp");
@@ -51,16 +65,38 @@ static void write_header(FILE *fp)
     fflush(fp);
 }
 
-int db_open(db_handle **db_out, const char *path)
+static void flush_row(csv_ctx *ctx, time_t now)
+{
+    char time_buf[32];
+    struct tm tm_info;
+    localtime_r(&now, &tm_info);
+    strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm_info);
+
+    fprintf(ctx->fp, "%s", time_buf);
+
+    for (int i = 1; i < SEM_TYPE_COUNT; i++)
+    {
+        fprintf(ctx->fp, ",");
+        if (ctx->has_value[i]) fprintf(ctx->fp, "%.6g", ctx->values[i]);
+    }
+    fprintf(ctx->fp, "\n");
+    fflush(ctx->fp);
+}
+
+/* ============================================================================
+ * Backend Ops Implementation
+ * ============================================================================ */
+
+static int csv_open(void **ctx_out, const char *path)
 {
     if (!path) return -EINVAL;
 
-    db_handle *db = calloc(1, sizeof(db_handle));
-    if (!db) return -ENOMEM;
+    csv_ctx *ctx = mem_alloc(sizeof(*ctx));
+    if (!ctx) return -ENOMEM;
 
-    snprintf(db->path, sizeof(db->path), "%s/history.csv", path);
+    snprintf(ctx->path, sizeof(ctx->path), "%s/history.csv", path);
 
-    // Create directory recursively (mkdir -p behavior)
+    /* Create directory recursively (mkdir -p behavior) */
     char tmp[256];
     snprintf(tmp, sizeof(tmp), "%s", path);
     for (char *p = tmp + 1; *p; p++)
@@ -72,30 +108,29 @@ int db_open(db_handle **db_out, const char *path)
             *p = '/';
         }
     }
-    mkdir(tmp, 0755);  // Create final directory
+    mkdir(tmp, 0755);
 
-    bool needs_header = (access(db->path, F_OK) != 0);
+    bool needs_header = (access(ctx->path, F_OK) != 0);
 
-    db->fp = fopen(db->path, "a+");
-    if (!db->fp)
+    ctx->fp = fopen(ctx->path, "a+");
+    if (!ctx->fp)
     {
-        free(db);
+        mem_free(ctx);
         return -errno;
     }
 
     if (needs_header)
     {
-        write_header(db->fp);
+        write_header(ctx->fp);
     }
     else
     {
-        // Replay
-        fseek(db->fp, 0, SEEK_SET);
+        /* Replay existing data to populate in-memory state */
+        fseek(ctx->fp, 0, SEEK_SET);
         char line[4096];
-        // Skip header
-        if (fgets(line, sizeof(line), db->fp))
+        if (fgets(line, sizeof(line), ctx->fp)) /* Skip header */
         {
-            while (fgets(line, sizeof(line), db->fp))
+            while (fgets(line, sizeof(line), ctx->fp))
             {
                 line[strcspn(line, "\r\n")] = 0;
                 char *ptr = line;
@@ -110,11 +145,11 @@ int db_open(db_handle **db_out, const char *path)
                     {
                         char *endptr = NULL;
                         double val = strtod(token, &endptr);
-                        if (endptr != token)  // Valid conversion
+                        if (endptr != token)
                         {
-                            db->values[i] = val;
-                            db->has_value[i] = true;
-                            db->last_ts[i] = (int64_t) row_ts;
+                            ctx->values[i] = val;
+                            ctx->has_value[i] = true;
+                            ctx->last_ts[i] = (int64_t) row_ts;
                         }
                     }
                 }
@@ -122,127 +157,86 @@ int db_open(db_handle **db_out, const char *path)
         }
     }
 
-    db->interval_sec = 60;
-    db->last_flush = time(NULL);
+    ctx->interval_sec = 60;
+    ctx->last_flush = time(NULL);
 
-    *db_out = db;
+    *ctx_out = ctx;
     return 0;
 }
 
-// Forward decl
-static void flush_row(db_handle *db, time_t now);
-
-void db_close(db_handle **db_ptr)
+static void csv_close(void **ctx_ptr)
 {
-    if (db_ptr && *db_ptr)
+    if (!ctx_ptr || !*ctx_ptr) return;
+
+    csv_ctx *ctx = *ctx_ptr;
+    if (ctx->fp)
     {
-        db_handle *db = *db_ptr;
-        // Flush before close to ensure persistence
-        if (db->fp)
+        /* Flush before close to ensure persistence */
+        time_t flush_ts = time(NULL);
+        int64_t max_ts = 0;
+        for (int i = 1; i < SEM_TYPE_COUNT; i++)
         {
-            time_t flush_ts = time(NULL);
-            int64_t max_ts = 0;
-            for (int i = 1; i < SEM_TYPE_COUNT; i++)
-            {
-                if (db->has_value[i] && db->last_ts[i] > max_ts) max_ts = db->last_ts[i];
-            }
-            if (max_ts > 0) flush_ts = (time_t) max_ts;
-
-            flush_row(db, flush_ts);
-            fclose(db->fp);
+            if (ctx->has_value[i] && ctx->last_ts[i] > max_ts) max_ts = ctx->last_ts[i];
         }
-        free(db);
-        *db_ptr = NULL;
+        if (max_ts > 0) flush_ts = (time_t) max_ts;
+
+        flush_row(ctx, flush_ts);
+        fclose(ctx->fp);
     }
+    mem_free(ctx);
+    *ctx_ptr = NULL;
 }
 
-const char *db_error_message(const db_handle *db)
-{
-    (void) db;
-    if (!db) return "Database handle is NULL";
-    return "Database operation failed";
-}
-
-int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double value,
-                    const char *currency, const char *source_id)
+static int csv_insert_tier1(void *ctx_ptr, semantic_type type, int64_t timestamp, double value,
+                            const char *currency, const char *source_id)
 {
     (void) currency;
     (void) source_id;
-    if (!db || type <= SEM_UNKNOWN || type >= SEM_TYPE_COUNT) return -EINVAL;
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx || type <= SEM_UNKNOWN || type >= SEM_TYPE_COUNT) return -EINVAL;
 
-    if (db->has_value[type] && db->last_ts[type] == timestamp) return -EEXIST;
+    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp) return -EEXIST;
 
-    db->values[type] = value;
-    db->has_value[type] = true;
-    db->last_ts[type] = timestamp;
+    ctx->values[type] = value;
+    ctx->has_value[type] = true;
+    ctx->last_ts[type] = timestamp;
     return 0;
 }
 
-static void flush_row(db_handle *db, time_t now)
+static int csv_query_latest_tier1(void *ctx_ptr, semantic_type type, double *out_val,
+                                  int64_t *out_ts)
 {
-    char time_buf[32];
-    struct tm tm_info;
-    localtime_r(&now, &tm_info);
-    strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm_info);
-
-    fprintf(db->fp, "%s", time_buf);
-
-    for (int i = 1; i < SEM_TYPE_COUNT; i++)
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx || type >= SEM_TYPE_COUNT) return -EINVAL;
+    if (ctx->has_value[type])
     {
-        fprintf(db->fp, ",");
-        if (db->has_value[i]) fprintf(db->fp, "%.6g", db->values[i]);
-    }
-    fprintf(db->fp, "\n");
-    fflush(db->fp);
-}
-
-int db_tick(db_handle *db)
-{
-    if (!db) return -EINVAL;
-    time_t now = time(NULL);
-    if (now - db->last_flush >= db->interval_sec)
-    {
-        flush_row(db, now);
-        db->last_flush = now;
-    }
-    return 0;
-}
-
-void db_set_interval(db_handle *db, int interval_sec)
-{
-    if (db && interval_sec > 0) db->interval_sec = interval_sec;
-}
-
-int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, int64_t *out_ts)
-{
-    if (!db || type >= SEM_TYPE_COUNT) return -EINVAL;
-    if (db->has_value[type])
-    {
-        *out_val = db->values[type];
-        *out_ts = db->last_ts[type];
+        *out_val = ctx->values[type];
+        *out_ts = ctx->last_ts[type];
         return 0;
     }
-    return -2;
+    return -2; /* Not found */
 }
 
-int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int64_t to_ts,
-                         double **out_values, int64_t **out_ts, size_t *out_count)
+static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from_ts, int64_t to_ts,
+                                 double **out_values, int64_t **out_ts, size_t *out_count)
 {
-    if (!db || !db->fp || !out_values || !out_ts || !out_count) return -EINVAL;
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx || !ctx->fp || !out_values || !out_ts || !out_count) return -EINVAL;
 
-    fseek(db->fp, 0, SEEK_SET);
+    fseek(ctx->fp, 0, SEEK_SET);
     char line[4096];
-    if (!fgets(line, sizeof(line), db->fp)) return -1;
+    if (!fgets(line, sizeof(line), ctx->fp)) return -1;
 
     int col_idx = -1;
     int current_col = 0;
-    char *header_dup = strdup(line);
+    char *header_dup = mem_alloc(strlen(line) + 1);
+    if (header_dup) strcpy(header_dup, line);
     char *token = strtok(header_dup, ",\n");
 
     const semantic_meta *meta = semantic_get_meta(type);
     if (!meta)
     {
-        free(header_dup);
+        mem_free(header_dup);
         return -EINVAL;
     }
 
@@ -256,7 +250,7 @@ int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int
         token = strtok(NULL, ",\n");
         current_col++;
     }
-    free(header_dup);
+    mem_free(header_dup);
 
     if (col_idx == -1)
     {
@@ -268,16 +262,16 @@ int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int
 
     size_t cap = 256;
     size_t count = 0;
-    double *vals = malloc(cap * sizeof(double));
-    int64_t *tss = malloc(cap * sizeof(int64_t));
+    double *vals = mem_alloc(cap * sizeof(*vals));
+    int64_t *tss = mem_alloc(cap * sizeof(*tss));
     if (!vals || !tss)
     {
-        free(vals);
-        free(tss);
+        mem_free(vals);
+        mem_free(tss);
         return -ENOMEM;
     }
 
-    while (fgets(line, sizeof(line), db->fp))
+    while (fgets(line, sizeof(line), ctx->fp))
     {
         char *ptr = line;
         char *comma = strchr(ptr, ',');
@@ -319,20 +313,20 @@ int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int
                     {
                         cap *= 2;
 
-                        double *new_vals = realloc(vals, cap * sizeof(double));
+                        double *new_vals = mem_realloc(vals, cap * sizeof(double));
                         if (!new_vals)
                         {
-                            free(vals);
-                            free(tss);
+                            mem_free(vals);
+                            mem_free(tss);
                             return -ENOMEM;
                         }
                         vals = new_vals;
 
-                        int64_t *new_tss = realloc(tss, cap * sizeof(int64_t));
+                        int64_t *new_tss = mem_realloc(tss, cap * sizeof(int64_t));
                         if (!new_tss)
                         {
-                            free(vals);
-                            free(tss);
+                            mem_free(vals);
+                            mem_free(tss);
                             return -ENOMEM;
                         }
                         tss = new_tss;
@@ -350,62 +344,101 @@ int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int
     return 0;
 }
 
-int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t timestamp)
+static int csv_query_point_exists_tier1(void *ctx_ptr, semantic_type type, int64_t timestamp)
 {
-    if (!db) return -EINVAL;
-    if (db->has_value[type] && db->last_ts[type] == timestamp) return 1;
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx) return -EINVAL;
+    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp) return 1;
     return 0;
 }
 
-int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const char *json_payload,
-                    const char *source_id)
+static int csv_insert_tier2(void *ctx_ptr, const char *key, int64_t timestamp,
+                            const char *json_payload, const char *source_id)
 {
-    (void) db;
+    (void) ctx_ptr;
     (void) key;
     (void) timestamp;
     (void) json_payload;
     (void) source_id;
-    return 0;
+    return 0; /* Tier 2 not implemented for CSV */
 }
 
-int db_query_latest_tier2(db_handle *db, const char *key, char **out_json, int64_t *out_ts)
+static int csv_query_latest_tier2(void *ctx_ptr, const char *key, char **out_json, int64_t *out_ts)
 {
-    (void) db;
+    (void) ctx_ptr;
     (void) key;
     (void) out_json;
     (void) out_ts;
-    return -1;
+    return -1; /* Tier 2 not implemented for CSV */
 }
 
-void db_free(void *ptr) { free(ptr); }
-int db_maintenance(db_handle *db)
+static int csv_tick(void *ctx_ptr)
 {
-    (void) db;
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx) return -EINVAL;
+    time_t now = time(NULL);
+    if (now - ctx->last_flush >= ctx->interval_sec)
+    {
+        flush_row(ctx, now);
+        ctx->last_flush = now;
+    }
     return 0;
 }
-/**
- * Check if database is empty (no data rows).
- * Used for bootstrap detection.
- */
-int db_is_empty(db_handle *db)
-{
-    if (!db || !db->fp) return 1;  // Treat invalid as empty
 
-    // Check if file has more than just the header line
-    FILE *fp = fopen(db->path, "r");
+static void csv_set_interval(void *ctx_ptr, int interval_sec)
+{
+    csv_ctx *ctx = ctx_ptr;
+    if (ctx && interval_sec > 0) ctx->interval_sec = interval_sec;
+}
+
+static int csv_is_empty(void *ctx_ptr)
+{
+    csv_ctx *ctx = ctx_ptr;
+    if (!ctx || !ctx->fp) return 1;
+
+    FILE *fp = fopen(ctx->path, "r");
     if (!fp) return 1;
 
-    // Skip header
     char line[8192];
+    /* Skip header */
     if (!fgets(line, sizeof(line), fp))
     {
         fclose(fp);
         return 1;
     }
 
-    // Try to read first data line
+    /* Try to read first data line */
     int has_data = (fgets(line, sizeof(line), fp) != NULL);
     fclose(fp);
 
-    return !has_data;  // Empty if no data line
+    return !has_data;
 }
+
+static const char *csv_error_message(void *ctx_ptr)
+{
+    (void) ctx_ptr;
+    return "CSV backend operation failed";
+}
+
+/* ============================================================================
+ * Ops Table Export
+ * ============================================================================ */
+
+static const db_backend_ops CSV_OPS = {
+    .open = csv_open,
+    .close = csv_close,
+    .insert_tier1 = csv_insert_tier1,
+    .query_latest_tier1 = csv_query_latest_tier1,
+    .query_range_tier1 = csv_query_range_tier1,
+    .query_point_exists_tier1 = csv_query_point_exists_tier1,
+    .insert_tier2 = csv_insert_tier2,
+    .query_latest_tier2 = csv_query_latest_tier2,
+    .tick = csv_tick,
+    .set_interval = csv_set_interval,
+    .prune_tier1 = NULL, /* Not implemented */
+    .is_empty = csv_is_empty,
+    .maintenance = NULL, /* Not implemented */
+    .error_message = csv_error_message,
+};
+
+const db_backend_ops *csv_backend_get_ops(void) { return &CSV_OPS; }

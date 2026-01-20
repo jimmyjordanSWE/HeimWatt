@@ -10,12 +10,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "core/config.h"
 #include "db.h"
 #include "libs/unity/unity.h"
 #include "semantic_types.h"
 
 static char test_dir[256];
 static db_handle *db = NULL;
+static config *cfg = NULL;
 
 void file_backend_setUp(void)
 {
@@ -24,7 +26,11 @@ void file_backend_setUp(void)
     char *result = mkdtemp(test_dir);
     TEST_ASSERT_NOT_NULL_MESSAGE(result, "Failed to create temp dir");
 
-    int ret = db_open(&db, test_dir);
+    cfg = config_create();
+    TEST_ASSERT_NOT_NULL(cfg);
+    TEST_ASSERT_EQUAL_INT(0, config_add_backend(cfg, "csv", test_dir, true));
+
+    int ret = db_open(&db, cfg);
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, ret, "db_open failed");
     TEST_ASSERT_NOT_NULL(db);
 }
@@ -34,6 +40,10 @@ void file_backend_tearDown(void)
     if (db)
     {
         db_close(&db);
+    }
+    if (cfg)
+    {
+        config_destroy(&cfg);
     }
     // Cleanup temp dir
     char cmd[512];
@@ -138,7 +148,7 @@ void test_db_index_persistence(void)
 
     // Close and reopen
     db_close(&db);
-    int ret = db_open(&db, test_dir);
+    int ret = db_open(&db, cfg);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     // Should still find the point after reopen (index reloaded from file)

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "memory.h"
 #include "sdk_internal.h"
 
 int sdk_get_config(plugin_ctx *ctx, const char *key, char **value)
@@ -27,7 +28,7 @@ int sdk_get_config(plugin_ctx *ctx, const char *key, char **value)
         if (end)
         {
             size_t len = end - p;
-            char *raw_val = malloc(len + 1);
+            char *raw_val = mem_alloc(len + 1);
             if (!raw_val) return -1;
             memcpy(raw_val, p, len);
             raw_val[len] = '\0';
@@ -40,7 +41,7 @@ int sdk_get_config(plugin_ctx *ctx, const char *key, char **value)
                                                      &processed);
                 if (ret == 0 && processed)
                 {
-                    free(raw_val);
+                    mem_free(raw_val);
                     *value = processed;
                     return 0;
                 }
@@ -61,7 +62,9 @@ int sdk_substitute_config_vars(const char *input, time_t now, char **output)
     // Check for placeholders
     if (!strstr(input, "{date}") && !strstr(input, "{iso}"))
     {
-        *output = strdup(input);
+        size_t slen = strlen(input);
+        *output = mem_alloc(slen + 1);
+        if (*output) strcpy(*output, input);
         return 0;
     }
 
@@ -74,7 +77,7 @@ int sdk_substitute_config_vars(const char *input, time_t now, char **output)
     char iso_str[32];  // YYYY-MM-DDTHH:MM:SSZ
     strftime(iso_str, sizeof(iso_str), "%Y-%m-%dT%H:%M:%SZ", &tm);
 
-    char *new_val = malloc(4096);
+    char *new_val = mem_alloc(4096);
     if (!new_val) return -1;
 
     const char *src = input;

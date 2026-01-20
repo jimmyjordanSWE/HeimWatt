@@ -19,6 +19,7 @@
 #include "db.h"
 #include "libs/cJSON.h"
 #include "log.h"
+#include "memory.h"
 #include "net/http_server.h"
 
 enum
@@ -67,10 +68,9 @@ static volatile int g_shutdown = 0;
 
 heimwatt_ctx *heimwatt_create(void)
 {
-    heimwatt_ctx *ctx = malloc(sizeof(*ctx));
+    heimwatt_ctx *ctx = mem_alloc(sizeof(*ctx));
     if (ctx)
     {
-        memset(ctx, 0, sizeof(*ctx));
         pthread_mutex_init(&ctx->conn_lock, NULL);
     }
     return ctx;
@@ -88,7 +88,7 @@ static void api_status(heimwatt_ctx *ctx, http_response *resp)
 
     char *str = cJSON_PrintUnformatted(json);
     http_response_set_json(resp, str);
-    free(str);
+    mem_free(str);
     cJSON_Delete(json);
 }
 
@@ -154,7 +154,7 @@ static void api_plugins_list(heimwatt_ctx *ctx, http_response *resp)
 
     char *str = cJSON_PrintUnformatted(arr);
     http_response_set_json(resp, str);
-    free(str);
+    mem_free(str);
     cJSON_Delete(arr);
 }
 
@@ -288,7 +288,7 @@ static int http_async_handler(const http_request *req, http_response *resp, cons
         pthread_mutex_lock(&ctx->conn_lock);
         ipc_conn_send(target, str, strlen(str));
         pthread_mutex_unlock(&ctx->conn_lock);
-        free(str);
+        mem_free(str);
 
         log_debug("[HTTP] Request forwarded to %s (id=%.8s...)", target_plugin_id, request_id);
         return 1;  // Pending - wait for IPC response
@@ -341,8 +341,9 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
     // 0.5 Load Config
     config *cfg = config_create();
     char config_path[256];
-    char db_open_path[512];
     snprintf(config_path, sizeof(config_path), "config/heimwatt.json");
+
+    // Load defaults first
     if (config_load(cfg, config_path) == 0)
     {
         const char *loc_name = config_get_loc_name(cfg);
@@ -352,31 +353,17 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
         ctx->lat = config_get_lat(cfg);
         ctx->lon = config_get_lon(cfg);
         snprintf(ctx->area, sizeof(ctx->area), "%s", config_get_area(cfg));
-
-        // Use location name in DB path if not default
-        if (strcmp(loc_name, "default") != 0)
-        {
-            // Append coordinates to disambiguate locations (e.g., stockholm_59.33N_18.07E)
-            char lat_dir = (ctx->lat >= 0) ? 'N' : 'S';
-            char lon_dir = (ctx->lon >= 0) ? 'E' : 'W';
-            snprintf(db_open_path, sizeof(db_open_path), "%s/%s_%.2f%c_%.2f%c", path, loc_name,
-                     fabs(ctx->lat), lat_dir, fabs(ctx->lon), lon_dir);
-        }
-        else
-        {
-            snprintf(db_open_path, sizeof(db_open_path), "%s/default", path);
-        }
     }
     else
     {
-        snprintf(db_open_path, sizeof(db_open_path), "%s/default", path);
+        log_warn("[INIT] Failed to load config, using defaults");
     }
 
     // 1. Open DB
-    ret = db_open(&ctx->db, db_open_path);
+    ret = db_open(&ctx->db, cfg);
     if (ret < 0)
     {
-        log_error("[INIT] Failed to open DB at %s: %s", db_open_path, strerror(-ret));
+        log_error("[INIT] Failed to open DB: %s", strerror(-ret));
         config_destroy(&cfg);
         goto cleanup;
     }
@@ -600,7 +587,7 @@ static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
                 {
                     ipc_conn_send(conn, resp_str, strlen(resp_str));
                     ipc_conn_send(conn, "\n", 1);
-                    free(resp_str);
+                    mem_free(resp_str);
                 }
                 cJSON_Delete(resp_json);
 

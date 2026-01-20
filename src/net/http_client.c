@@ -5,32 +5,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "memory.h"
+
 struct http_client
 {
     CURL *curl;
     struct curl_slist *headers;
     long timeout_ms;
 };
-
-// Response buffer
-typedef struct
-{
-    char *memory;
-    size_t size;
-} memory_struct;
-
+// Callback for writing data
 static size_t write_memory_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
-    memory_struct *mem = (memory_struct *) userp;
+    HwBuffer *buf = (HwBuffer *) userp;
 
-    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
-    if (!ptr) return 0;  // OOM
-
-    mem->memory = ptr;
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->memory[mem->size] = 0;
+    if (hw_buffer_append(buf, contents, realsize) < 0) return 0;  // OOM
 
     return realsize;
 }
@@ -39,14 +28,13 @@ int http_client_create(http_client **client_out)
 {
     if (!client_out) return -EINVAL;
 
-    http_client *c = malloc(sizeof(*c));
+    http_client *c = mem_alloc(sizeof(*c));
     if (!c) return -ENOMEM;
-    memset(c, 0, sizeof(*c));
 
     c->curl = curl_easy_init();
     if (!c->curl)
     {
-        free(c);
+        mem_free(c);
         return -ENOMEM;
     }
 
@@ -63,7 +51,7 @@ void http_client_destroy(http_client **client_ptr)
     if (c->headers) curl_slist_free_all(c->headers);
     if (c->curl) curl_easy_cleanup(c->curl);
 
-    free(c);
+    mem_free(c);
     *client_ptr = NULL;
 }
 
@@ -95,9 +83,8 @@ static int perform_request(http_client *client, const char *url, char **body_out
 {
     if (!client || !url) return -EINVAL;
 
-    memory_struct chunk;
-    chunk.memory = malloc(1);
-    chunk.size = 0;
+    HwBuffer chunk;
+    hw_buffer_init(&chunk);
 
     curl_easy_setopt(client->curl, CURLOPT_URL, url);
     curl_easy_setopt(client->curl, CURLOPT_WRITEFUNCTION, write_memory_callback);
@@ -114,17 +101,17 @@ static int perform_request(http_client *client, const char *url, char **body_out
 
     if (res != CURLE_OK)
     {
-        free(chunk.memory);
+        hw_buffer_free(&chunk);
         if (body_out) *body_out = NULL;
         return -1;
     }
 
     if (body_out)
-        *body_out = chunk.memory;
+        *body_out = chunk.data;  // Transfer ownership
     else
-        free(chunk.memory);
+        hw_buffer_free(&chunk);
 
-    if (len_out) *len_out = chunk.size;
+    if (len_out) *len_out = chunk.len;
 
     return (int) http_code;
 }

@@ -16,6 +16,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "memory.h"
+
 struct tcp_socket
 {
     int fd;
@@ -57,7 +59,7 @@ int tcp_listen(tcp_socket **sock, int port, int backlog)
         return -err;
     }
 
-    tcp_socket *s = malloc(sizeof(*s));
+    tcp_socket *s = mem_alloc(sizeof(*s));
     if (!s)
     {
         close(fd);
@@ -78,7 +80,7 @@ int tcp_accept(tcp_socket *sock, tcp_socket **client)
     int fd = accept(sock->fd, (struct sockaddr *) &addr, &len);
     if (fd < 0) return -errno;
 
-    tcp_socket *c = malloc(sizeof(*c));
+    tcp_socket *c = mem_alloc(sizeof(*c));
     if (!c)
     {
         close(fd);
@@ -94,8 +96,8 @@ void tcp_close(tcp_socket **sock)
 {
     if (sock && *sock)
     {
-        close((*sock)->fd);
-        free(*sock);
+        if ((*sock)->fd >= 0) close((*sock)->fd);
+        mem_free(*sock);
         *sock = NULL;
     }
 }

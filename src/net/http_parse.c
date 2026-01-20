@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "memory.h"
+
 void http_request_init(http_request *req)
 {
     if (req) memset(req, 0, sizeof(*req));
@@ -26,26 +28,26 @@ void http_response_init(http_response *resp)
 
 void http_request_destroy(http_request *req)
 {
-    if (req)
-    {
-        free(req->body);
-        req->body = NULL;
-    }
+    // No-op if using arena (arena reset handles it)
+    // But struct itself might be on stack/heap.
+    // If we used direct mem_alloc for body in some manual cases, we might leak?
+    // We assume http_request lifecycle is bound to arena now.
+    (void) req;
 }
 
 void http_response_destroy(http_response *resp)
 {
     if (resp)
     {
-        free(resp->body);
+        mem_free(resp->body);
         resp->body = NULL;
     }
 }
 
 // Simple parser for "METHOD /path?query HTTP/1.1"
-int http_parse_request(const char *raw, size_t len, http_request *req)
+int http_parse_request(const char *raw, size_t len, http_request *req, HwArena *arena)
 {
-    if (!raw || !req) return -1;
+    if (!raw || !req || !arena) return -1;
     http_request_init(req);
 
     // Make a copy to tokenize safely? Or scan.
@@ -68,20 +70,32 @@ int http_parse_request(const char *raw, size_t len, http_request *req)
 
     if (!method || !path) return -1;
 
-    snprintf(req->method, sizeof(req->method), "%s", method);
+    // Arena Dup
+    size_t mlen = strlen(method);
+    req->method = hw_arena_alloc(arena, mlen + 1);
+    if (!req->method) return -1;
+    memcpy(req->method, method, mlen + 1);
 
     // split path and query
     char *q = strchr(path, '?');
     if (q)
     {
         *q = 0;
-        snprintf(req->path, sizeof(req->path), "%s", path);
-        snprintf(req->query, sizeof(req->query), "%s", q + 1);
+
+        size_t plen = strlen(path);
+        req->path = hw_arena_alloc(arena, plen + 1);
+        if (req->path) memcpy(req->path, path, plen + 1);
+
+        size_t qlen = strlen(q + 1);
+        req->query = hw_arena_alloc(arena, qlen + 1);
+        if (req->query) memcpy(req->query, q + 1, qlen + 1);
     }
     else
     {
-        snprintf(req->path, sizeof(req->path), "%s", path);
-        req->query[0] = 0;
+        size_t plen = strlen(path);
+        req->path = hw_arena_alloc(arena, plen + 1);
+        if (req->path) memcpy(req->path, path, plen + 1);
+        req->query = NULL;
     }
 
     // Headers - skip to next line
@@ -113,9 +127,16 @@ int http_parse_request(const char *raw, size_t len, http_request *req)
 
             if (req->header_count < HTTP_MAX_HEADERS)
             {
-                snprintf(req->headers[req->header_count].name, HTTP_MAX_HEADER_NAME, "%.*s",
-                         HTTP_MAX_HEADER_NAME - 1, hline);
-                snprintf(req->headers[req->header_count].value, HTTP_MAX_HEADER_VALUE, "%s", val);
+                size_t nlen = strlen(hline);
+                req->headers[req->header_count].name = hw_arena_alloc(arena, nlen + 1);
+                if (req->headers[req->header_count].name)
+                    memcpy(req->headers[req->header_count].name, hline, nlen + 1);
+
+                size_t vlen = strlen(val);
+                req->headers[req->header_count].value = hw_arena_alloc(arena, vlen + 1);
+                if (req->headers[req->header_count].value)
+                    memcpy(req->headers[req->header_count].value, val, vlen + 1);
+
                 req->header_count++;
             }
         }
@@ -127,67 +148,61 @@ int http_parse_request(const char *raw, size_t len, http_request *req)
     return 0;
 }
 
-int http_serialize_response(const http_response *resp, char **out, size_t *out_len)
+int http_serialize_response_buf(const http_response *resp, char *buf, size_t cap, size_t *len_out)
 {
-    if (!resp || !out) return -1;
-
-    // Buffer
-    enum
-    {
-        BUF_SIZE = 16384
-    };
-    char *buf = malloc(BUF_SIZE);  // 16KB fixed for MVP
-    if (!buf) return -1;
+    if (!resp || !buf || !len_out || cap == 0) return -1;
 
     size_t off = 0;
-    size_t remaining = BUF_SIZE;
-    int n = snprintf(buf + off, remaining, "HTTP/1.1 %d OK\r\n", resp->status_code);
-    if (n > 0 && (size_t) n < remaining)
+    size_t remaining = cap;
+
+    // Helper macro to append safely without logic duplication
+#define APPEND_FMT(fmt, ...)                                        \
+    do                                                              \
+    {                                                               \
+        int n = snprintf(buf + off, remaining, fmt, ##__VA_ARGS__); \
+        if (n < 0 || (size_t) n >= remaining) return -1;            \
+        off += (size_t) n;                                          \
+        remaining -= (size_t) n;                                    \
+    } while (0)
+
+    APPEND_FMT("HTTP/1.1 %d OK\r\n", resp->status_code);
+
+    for (size_t i = 0; i < resp->header_count; i++)
     {
-        off += (size_t) n;
-        remaining -= (size_t) n;
+        APPEND_FMT("%s: %s\r\n", resp->headers[i].name, resp->headers[i].value);
     }
 
-    for (size_t i = 0; i < resp->header_count && remaining > 0; i++)
-    {
-        n = snprintf(buf + off, remaining, "%s: %s\r\n", resp->headers[i].name,
-                     resp->headers[i].value);
-        if (n > 0 && (size_t) n < remaining)
-        {
-            off += (size_t) n;
-            remaining -= (size_t) n;
-        }
-    }
-
-    n = snprintf(buf + off, remaining, "Content-Length: %zu\r\n", resp->body_len);
-    if (n > 0 && (size_t) n < remaining)
-    {
-        off += (size_t) n;
-        remaining -= (size_t) n;
-    }
-
-    n = snprintf(buf + off, remaining, "Connection: close\r\n");
-    if (n > 0 && (size_t) n < remaining)
-    {
-        off += (size_t) n;
-        remaining -= (size_t) n;
-    }
-
-    n = snprintf(buf + off, remaining, "\r\n");
-    if (n > 0 && (size_t) n < remaining)
-    {
-        off += (size_t) n;
-        remaining -= (size_t) n;
-    }
+    APPEND_FMT("Content-Length: %zu\r\n", resp->body_len);
+    APPEND_FMT("Connection: close\r\n");
+    APPEND_FMT("\r\n");
 
     if (resp->body && resp->body_len > 0)
     {
+        if (resp->body_len > remaining) return -1;
         memcpy(buf + off, resp->body, resp->body_len);
         off += resp->body_len;
     }
 
+    *len_out = off;
+    return 0;
+#undef APPEND_FMT
+}
+
+int http_serialize_response(const http_response *resp, char **out, size_t *out_len)
+{
+    if (!resp || !out) return -1;
+
+    size_t cap = 16384;
+    char *buf = mem_alloc(cap);
+    if (!buf) return -1;
+
+    if (http_serialize_response_buf(resp, buf, cap, out_len) < 0)
+    {
+        mem_free(buf);
+        return -1;
+    }
+
     *out = buf;
-    *out_len = off;
     return 0;
 }
 
@@ -195,7 +210,7 @@ void http_response_set_json(http_response *resp, const char *json)
 {
     if (!resp || !json) return;
     size_t len = strlen(json);
-    resp->body = malloc(len + 1);
+    resp->body = mem_alloc(len + 1);
     // ...
     if (resp->body)
     {

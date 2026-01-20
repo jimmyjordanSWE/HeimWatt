@@ -32,6 +32,9 @@
  * or external synchronization must be used.
  */
 
+struct config;
+
+#include <stddef.h>
 #include <stdint.h>
 
 #include "semantic_types.h"
@@ -75,14 +78,9 @@ typedef struct db_handle db_handle;
  * Creates the database file if it does not exist.
  * Initializes schema if needed.
  *
- * @param[out] db   Output pointer for handle
- * @param[in]  path Path to database file
  * @return 0 on success, error code on failure.
- *
- * @note The path format may be backend-specific. For SQLite, this is a file path.
- *       For PostgreSQL, this would be a connection string.
  */
-int db_open(db_handle **db, const char *path);
+int db_open(db_handle **db, const struct config *cfg);
 
 /**
  * @brief Close database connection and free resources.

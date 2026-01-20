@@ -4,6 +4,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "memory.h"
+
 // Semantic Type Names
 #define TYPE_TEMP "atmosphere.temperature"
 #define TYPE_HUMID "atmosphere.humidity"
@@ -21,7 +23,7 @@ static char *get_config_url(plugin_ctx *ctx, const char *key, const char *defaul
     {
         return val;
     }
-    return default_val ? strdup(default_val) : NULL;
+    return default_val ? mem_strdup(default_val) : NULL;
 }
 
 // ----------------------------------------------------------------------------
@@ -43,7 +45,7 @@ static void fetch_obs(plugin_ctx *ctx, const char *config_key, const char *type_
     if (sdk_fetch_json(ctx, url, &data) < 0)
     {
         sdk_log(ctx, SDK_LOG_ERROR, "Failed to fetch history for %s", type_name);
-        free(url);
+        mem_free(url);
         return;
     }
 
@@ -53,7 +55,7 @@ static void fetch_obs(plugin_ctx *ctx, const char *config_key, const char *type_
     {
         sdk_log(ctx, SDK_LOG_WARN, "No 'value' array in obs response");
         sdk_json_free(data);
-        free(url);
+        mem_free(url);
         return;
     }
 
@@ -81,7 +83,7 @@ static void fetch_obs(plugin_ctx *ctx, const char *config_key, const char *type_
     sdk_log(ctx, SDK_LOG_INFO, "Reported %zu history points for %s", reported, type_name);
 
     sdk_json_free(data);
-    free(url);
+    mem_free(url);
 }
 
 // ----------------------------------------------------------------------------
@@ -118,7 +120,7 @@ static void on_tick(plugin_ctx *ctx, int64_t now)
     if (sdk_fetch_json(ctx, url, &data) < 0)
     {
         sdk_log(ctx, SDK_LOG_ERROR, "Failed to fetch weather forecast from API");
-        free(url);
+        mem_free(url);
         return;
     }
     sdk_log(ctx, SDK_LOG_INFO, "Successfully fetched forecast data");
@@ -157,7 +159,7 @@ static void on_tick(plugin_ctx *ctx, int64_t now)
     }
 
     sdk_json_free(data);
-    free(url);
+    mem_free(url);
 }
 
 int init(plugin_ctx *ctx)

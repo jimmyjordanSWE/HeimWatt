@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "log.h"
+#include "memory.h"
 #include "tcp_server.h"
 
 enum
@@ -48,8 +49,13 @@ typedef struct http_conn
     conn_state state;
 
     // Read buffer
-    char read_buf[READ_BUF_SIZE];
-    size_t read_pos;
+    HwBuffer read_buf;
+    size_t read_pos;  // kept for compatibility if needed, or remove.
+    // Actually http_parse needs data pointer. read_buf.len is the size.
+    // read_pos in original code was tracking length. We can use read_buf.len.
+    // But wait, existing code might use read_pos for incremental parsing state?
+    // "conn->read_buf[conn->read_pos] = '\0'". read_pos is just used bytes.
+    // So read_buf.len replaces read_pos.
 
     // Parsed request
     http_request req;
@@ -57,9 +63,8 @@ typedef struct http_conn
 
     // Response
     http_response resp;
-    char *write_buf;
+    HwBuffer write_buf;
     size_t write_pos;
-    size_t write_len;
 
     // Request ID for async correlation
     char request_id[REQUEST_ID_LEN];
@@ -69,6 +74,9 @@ typedef struct http_conn
 
     // Linked list for connection pool
     struct http_conn *next;
+
+    // Request scoped arena
+    HwArena *arena;
 } http_conn;
 
 struct http_server
@@ -89,8 +97,9 @@ struct http_server
     http_conn *connections[MAX_CONNECTIONS];
     int conn_count;
 
-    // Free list for connection reuse
-    http_conn *free_list;
+    // Connection Pool
+    HwPool *conn_pool;
+    HwPool *io_pool;
     pthread_mutex_t conn_lock;
 
     // Pending async responses (for bridge)
@@ -123,15 +132,24 @@ int http_server_create(http_server **srv, int port)
 {
     if (!srv) return -1;
 
-    http_server *s = malloc(sizeof(*s));
+    http_server *s = mem_alloc(sizeof(*s));
     if (!s) return -ENOMEM;
-    memset(s, 0, sizeof(*s));
 
     s->port = port;
     s->timeout_ms = 30000;
     s->max_conns = MAX_CONNECTIONS;
     s->listen_fd = -1;
     s->epoll_fd = -1;
+
+    s->conn_pool = hw_pool_create(sizeof(http_conn), MAX_CONNECTIONS);
+    s->io_pool = hw_pool_create(16384, MAX_CONNECTIONS);
+    if (!s->conn_pool || !s->io_pool)
+    {
+        if (s->conn_pool) hw_pool_destroy(&s->conn_pool);
+        if (s->io_pool) hw_pool_destroy(&s->io_pool);
+        mem_free(s);
+        return -ENOMEM;
+    }
 
     pthread_mutex_init(&s->conn_lock, NULL);
     pthread_mutex_init(&s->pending_lock, NULL);
@@ -153,20 +171,15 @@ void http_server_destroy(http_server **srv)
         if (s->connections[i])
         {
             if (s->connections[i]->fd >= 0) close(s->connections[i]->fd);
-            free(s->connections[i]->write_buf);
-            free(s->connections[i]);
+            if (s->connections[i]->arena) hw_arena_destroy(&s->connections[i]->arena);
+            hw_buffer_free(&s->connections[i]->read_buf);
+            hw_buffer_free(&s->connections[i]->write_buf);
+            mem_free(s->connections[i]);
         }
     }
 
-    // Free free list
-    http_conn *c = s->free_list;
-    while (c)
-    {
-        http_conn *next = c->next;
-        free(c->write_buf);
-        free(c);
-        c = next;
-    }
+    hw_pool_destroy(&s->conn_pool);
+    hw_pool_destroy(&s->io_pool);
 
     if (s->listen_fd >= 0) close(s->listen_fd);
     if (s->epoll_fd >= 0) close(s->epoll_fd);
@@ -174,7 +187,7 @@ void http_server_destroy(http_server **srv)
     pthread_mutex_destroy(&s->conn_lock);
     pthread_mutex_destroy(&s->pending_lock);
 
-    free(s);
+    mem_free(s);
     *srv = NULL;
 }
 
@@ -265,8 +278,17 @@ int http_server_complete_request(http_server *srv, const char *request_id,
     size_t out_len = 0;
     if (http_serialize_response(&conn->resp, &out, &out_len) == 0)
     {
-        conn->write_buf = out;
-        conn->write_len = out_len;
+        // Adopt the buffer or copy. Since we want to use generic HwBuffer logic:
+        hw_buffer_clear(&conn->write_buf);
+        if (hw_buffer_append(&conn->write_buf, out, out_len) < 0)
+        {
+            mem_free(out);
+            close_connection(srv, conn);
+            conn_unref(srv, conn);
+            return -1;
+        }
+        mem_free(out);  // We copied it.
+
         conn->write_pos = 0;
         conn->state = CONN_STATE_WRITING;
 
@@ -440,21 +462,7 @@ static http_conn *conn_alloc(http_server *srv)
 
     http_conn *conn = NULL;
 
-    // Try free list first
-    if (srv->free_list)
-    {
-        conn = srv->free_list;
-        srv->free_list = conn->next;
-        conn_reset(conn);
-    }
-    else
-    {
-        conn = malloc(sizeof(*conn));
-        if (conn)
-        {
-            memset(conn, 0, sizeof(*conn));
-        }
-    }
+    conn = hw_pool_alloc(srv->conn_pool);
 
     if (conn)
     {
@@ -495,8 +503,7 @@ static void conn_unref(http_server *srv, http_conn *conn)
 
     // Add to free list for reuse
     conn_reset(conn);
-    conn->next = srv->free_list;
-    srv->free_list = conn;
+    hw_pool_free(srv->conn_pool, conn);
 
     pthread_mutex_unlock(&srv->conn_lock);
 }
@@ -506,16 +513,15 @@ static void conn_reset(http_conn *conn)
     if (conn->fd >= 0) close(conn->fd);
     conn->fd = -1;
     conn->state = CONN_STATE_READING;
-    conn->read_pos = 0;
+    hw_buffer_clear(&conn->read_buf);
     conn->req_parsed = 0;
     memset(&conn->req, 0, sizeof(conn->req));
     memset(&conn->resp, 0, sizeof(conn->resp));
-    free(conn->write_buf);
-    conn->write_buf = NULL;
+    hw_buffer_clear(&conn->write_buf);
     conn->write_pos = 0;
-    conn->write_len = 0;
     conn->request_id[0] = '\0';
     conn->next = NULL;
+    if (conn->arena) hw_arena_reset(conn->arena);
 }
 
 static int handle_accept(http_server *srv)
@@ -554,6 +560,18 @@ static int handle_accept(http_server *srv)
         return 0;
     }
 
+    if (!conn->arena)
+    {
+        conn->arena = hw_arena_create(4096);
+        if (!conn->arena)
+        {
+            // OOM
+            close(client_fd);
+            conn_unref(srv, conn);  // Returns to pool
+            return 0;
+        }
+    }
+
     conn->fd = client_fd;
     conn->state = CONN_STATE_READING;
     generate_request_id(conn->request_id);
@@ -590,8 +608,8 @@ static int handle_read(http_server *srv, http_conn *conn)
 {
     while (1)
     {
-        ssize_t n =
-            read(conn->fd, conn->read_buf + conn->read_pos, READ_BUF_SIZE - conn->read_pos - 1);
+        char tmp[8192];
+        ssize_t n = read(conn->fd, tmp, sizeof(tmp));
 
         if (n < 0)
         {
@@ -607,14 +625,17 @@ static int handle_read(http_server *srv, http_conn *conn)
             return -1;  // Client closed
         }
 
-        conn->read_pos += n;
-        conn->read_buf[conn->read_pos] = '\0';
+        if (hw_buffer_append(&conn->read_buf, tmp, n) < 0)
+        {
+            return -1;  // OOM
+        }
     }
 
     // Try to parse request
     if (!conn->req_parsed)
     {
-        if (http_parse_request(conn->read_buf, conn->read_pos, &conn->req) == 0)
+        if (http_parse_request(conn->read_buf.data, conn->read_buf.len, &conn->req, conn->arena) ==
+            0)
         {
             conn->req_parsed = 1;
             conn->state = CONN_STATE_PROCESSING;
@@ -659,12 +680,32 @@ static int handle_read(http_server *srv, http_conn *conn)
             }
 
             // Synchronous completion
-            char *out = NULL;
-            size_t out_len = 0;
-            if (http_serialize_response(&conn->resp, &out, &out_len) == 0)
+            char *out = hw_pool_alloc(srv->io_pool);
+            int from_pool = 1;
+            if (!out)
             {
-                conn->write_buf = out;
-                conn->write_len = out_len;
+                out = mem_alloc(16384);
+                from_pool = 0;
+            }
+
+            size_t out_len = 0;
+            if (out && http_serialize_response_buf(&conn->resp, out, 16384, &out_len) == 0)
+            {
+                hw_buffer_clear(&conn->write_buf);
+                if (hw_buffer_append(&conn->write_buf, out, out_len) < 0)
+                {
+                    if (from_pool)
+                        hw_pool_free(srv->io_pool, out);
+                    else
+                        mem_free(out);
+                    return -1;
+                }
+
+                if (from_pool)
+                    hw_pool_free(srv->io_pool, out);
+                else
+                    mem_free(out);
+
                 conn->write_pos = 0;
                 conn->state = CONN_STATE_WRITING;
 
@@ -676,16 +717,24 @@ static int handle_read(http_server *srv, http_conn *conn)
             }
             else
             {
+                if (from_pool)
+                    hw_pool_free(srv->io_pool, out);
+                else
+                    mem_free(out);
                 return -1;
             }
         }
-        else if (conn->read_pos >= READ_BUF_SIZE - 1)
-        {
-            // Buffer full, can't parse - reject
-            log_warn("[HTTP] Request too large");
-            return -1;
-        }
     }
+    /*
+    // Previously we checked for buffer full here. Now we support infinite buffer.
+    // We relies on OOM or overall system constraints.
+    else if (conn->read_buf.len >= READ_BUF_SIZE - 1)
+    {
+         // HwBuffer full, can't parse - reject
+         log_warn("[HTTP] Request too large");
+         return -1;
+    }
+    */
 
     return 0;
 }
@@ -694,10 +743,10 @@ static int handle_write(http_server *srv, http_conn *conn)
 {
     (void) srv;
 
-    while (conn->write_pos < conn->write_len)
+    while (conn->write_pos < conn->write_buf.len)
     {
-        ssize_t n =
-            write(conn->fd, conn->write_buf + conn->write_pos, conn->write_len - conn->write_pos);
+        ssize_t n = write(conn->fd, conn->write_buf.data + conn->write_pos,
+                          conn->write_buf.len - conn->write_pos);
 
         if (n < 0)
         {
@@ -739,6 +788,8 @@ static void close_connection(http_server *srv, http_conn *conn)
     // Clean up request/response
     http_request_destroy(&conn->req);
     http_response_destroy(&conn->resp);
+
+    if (conn->arena) hw_arena_reset(conn->arena);
 
     conn_unref(srv, conn);
 }

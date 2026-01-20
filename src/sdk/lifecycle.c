@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "libs/cJSON.h"
+#include "memory.h"
 #include "sdk_internal.h"
 
 // Parse args: --socket <path> --id <id>
@@ -20,20 +21,23 @@ int sdk_create(plugin_ctx **ctx_out, int argc, char **argv)
 
     if (!ctx_out) return -EINVAL;
 
-    ctx = malloc(sizeof(*ctx));
+    ctx = mem_alloc(sizeof(*ctx));
     if (!ctx) return -ENOMEM;
-    memset(ctx, 0, sizeof(*ctx));
 
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--socket") == 0 && i + 1 < argc)
         {
-            ctx->socket_path = strdup(argv[i + 1]);
+            size_t len = strlen(argv[i + 1]);
+            ctx->socket_path = mem_alloc(len + 1);
+            if (ctx->socket_path) strcpy(ctx->socket_path, argv[i + 1]);
             i++;
         }
         else if (strcmp(argv[i], "--id") == 0 && i + 1 < argc)
         {
-            ctx->plugin_id = strdup(argv[i + 1]);
+            size_t len = strlen(argv[i + 1]);
+            ctx->plugin_id = mem_alloc(len + 1);
+            if (ctx->plugin_id) strcpy(ctx->plugin_id, argv[i + 1]);
             i++;
         }
     }
@@ -64,19 +68,19 @@ void sdk_destroy(plugin_ctx **ctx_ptr)
         close(ctx->ipc_fd);
     }
 
-    free(ctx->socket_path);
-    free(ctx->plugin_id);
+    mem_free(ctx->socket_path);
+    mem_free(ctx->plugin_id);
 
     // Free ticker cron expressions (memory leak fix)
     for (int i = 0; i < ctx->ticker_count; i++)
     {
         if (ctx->tickers[i].is_cron)
         {
-            free(ctx->tickers[i].cron_expr);
+            mem_free(ctx->tickers[i].cron_expr);
         }
     }
 
-    free(ctx);
+    mem_free(ctx);
     *ctx_ptr = NULL;
 }
 

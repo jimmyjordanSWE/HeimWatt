@@ -16,7 +16,8 @@ def generate():
         "-I", os.path.join(project_root, "libs"),
         "-I", os.path.join(project_root, "include"),
         "-I", os.path.join(project_root, "src"),
-        "-I", project_root
+        "-I", project_root,
+        "-I", os.path.join(project_root, "libs", "duckdb")
     ]
     
     commands = []

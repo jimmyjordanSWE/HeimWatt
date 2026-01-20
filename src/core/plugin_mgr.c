@@ -20,6 +20,7 @@
 
 #include "libs/cJSON.h"
 #include "libs/log.h"
+#include "memory.h"
 #include "semantic_types.h"
 
 enum
@@ -111,7 +112,7 @@ static int load_manifest(const char *manifest_path, plugin_handle *h)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *content = malloc((size_t) len + 1);
+    char *content = mem_alloc((size_t) len + 1);
     if (!content)
     {
         fclose(f);
@@ -123,7 +124,7 @@ static int load_manifest(const char *manifest_path, plugin_handle *h)
     fclose(f);
 
     cJSON *json = cJSON_Parse(content);
-    free(content);
+    mem_free(content);
 
     if (!json) return -1;
 
@@ -211,7 +212,7 @@ int plugin_mgr_init(plugin_mgr **mgr, const char *plugins_dir, const char *ipc_s
 {
     if (!mgr || !plugins_dir || !ipc_sock) return -1;
 
-    plugin_mgr *m = calloc(1, sizeof(*m));
+    plugin_mgr *m = mem_alloc(sizeof(*m));
     if (!m) return -1;
 
     (void) snprintf(m->plugins_dir, sizeof(m->plugins_dir), "%s", plugins_dir);
@@ -245,7 +246,7 @@ void plugin_mgr_destroy(plugin_mgr **mgr)
         }
     }
 
-    free(*mgr);
+    mem_free(*mgr);
     *mgr = NULL;
 }
 

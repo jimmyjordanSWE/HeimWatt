@@ -10,6 +10,8 @@
 
 #include <stddef.h>
 
+#include "memory.h"
+
 /* Maximum sizes */
 #define HTTP_MAX_METHOD 16
 #define HTTP_MAX_PATH 2048
@@ -22,20 +24,20 @@
  */
 typedef struct
 {
-    char method[HTTP_MAX_METHOD]; /**< "GET", "POST", etc. */
-    char path[HTTP_MAX_PATH];     /**< "/api/plan" */
-    char query[HTTP_MAX_PATH];    /**< "foo=bar" (without '?') */
+    char *method;
+    char *path;
+    char *query;
 
     /* Headers */
     struct
     {
-        char name[HTTP_MAX_HEADER_NAME];
-        char value[HTTP_MAX_HEADER_VALUE];
+        char *name;
+        char *value;
     } headers[HTTP_MAX_HEADERS];
     size_t header_count;
 
     /* Body */
-    char *body; /**< Heap-allocated, caller frees */
+    char *body; /**< Arena-allocated */
     size_t body_len;
 } http_request;
 
@@ -71,7 +73,7 @@ typedef struct
  * @param req Output request structure
  * @return 0 on success, -1 on parse error
  */
-int http_parse_request(const char *raw, size_t len, http_request *req);
+int http_parse_request(const char *raw, size_t len, http_request *req, HwArena *arena);
 
 /**
  * Serialize HTTP response to wire format.
@@ -83,6 +85,17 @@ int http_parse_request(const char *raw, size_t len, http_request *req);
  * @return 0 on success, -1 on error
  */
 int http_serialize_response(const http_response *resp, char **out, size_t *out_len);
+
+/**
+ * Serialize HTTP response into provided buffer.
+ *
+ * @param resp    Response to serialize
+ * @param buf     Target buffer
+ * @param cap     Buffer capacity
+ * @param len_out Output length written
+ * @return 0 on success, -1 on error (or if truncated)
+ */
+int http_serialize_response_buf(const http_response *resp, char *buf, size_t cap, size_t *len_out);
 
 /* ============================================================
  * HEADER HELPERS

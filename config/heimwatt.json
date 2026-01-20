@@ -1,5 +1,19 @@
 {
-    "csv_interval": 60,
+    "storage": {
+        "backends": [
+            {
+                "type": "duckdb",
+                "path": "data/heimwatt.duckdb",
+                "primary": true
+            },
+            {
+                "type": "csv",
+                "path": "data/csv",
+                "primary": false
+            }
+        ],
+        "csv_disk_write_interval_sec": 60
+    },
     "log_level": "info",
     "location": {
         "name": "stockholm",

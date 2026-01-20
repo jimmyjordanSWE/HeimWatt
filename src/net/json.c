@@ -7,7 +7,26 @@
 // Typedef casting? cJSON* is implementation detail.
 // internal: json_value is cJSON
 
+// Initialize cJSON hooks to use our tracked allocator
+// This runs before main() thanks to constructor attribute
+static void __attribute__((constructor)) json_init_hooks(void)
+{
+    cJSON_Hooks hooks = {.malloc_fn = mem_alloc, .free_fn = mem_free};
+    cJSON_InitHooks(&hooks);
+}
+
 json_value *json_parse(const char *str) { return (json_value *) cJSON_Parse(str); }
+
+json_value *json_parse_arena(const char *str, HwArena *arena)
+{
+    if (!str || !arena) return NULL;
+
+    mem_set_scope_arena(arena);
+    json_value *v = (json_value *) cJSON_Parse(str);
+    mem_set_scope_arena(NULL);
+
+    return v;
+}
 
 void json_free(json_value *v) { cJSON_Delete((cJSON *) v); }
 

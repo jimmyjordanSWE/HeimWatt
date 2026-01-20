@@ -27,6 +27,19 @@ typedef struct json_value json_value;
 json_value *json_parse(const char *str);
 
 /**
+ * @brief Parse JSON string using an arena allocator.
+ *
+ * Uses the provided arena for all internal allocations.
+ * WARNING: Do NOT call json_free() on the result. destroying the arena frees the memory.
+ *
+ * @param str JSON string
+ * @param arena The arena to use
+ * @return Parsed value or NULL on error
+ */
+#include "memory.h"  // For HwArena
+json_value *json_parse_arena(const char *str, HwArena *arena);
+
+/**
  * Free parsed value (and all children).
  *
  * @param v Value to free

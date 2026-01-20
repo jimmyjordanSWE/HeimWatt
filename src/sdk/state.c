@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "memory.h"
 #include "sdk_internal.h"
 
 int sdk_state_save(plugin_ctx *ctx, const char *key, const char *value)
@@ -48,7 +49,7 @@ int sdk_state_load(plugin_ctx *ctx, const char *key, char **value_out)
         if (end)
         {
             size_t len = end - p;
-            *value_out = malloc(len + 1);
+            *value_out = mem_alloc(len + 1);
             if (!*value_out) return -1;
             memcpy(*value_out, p, len);
             (*value_out)[len] = 0;

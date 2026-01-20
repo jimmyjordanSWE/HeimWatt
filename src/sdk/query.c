@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "memory.h"
 #include "sdk_internal.h"
 
 int sdk_query_latest(plugin_ctx *ctx, semantic_type type, sdk_data_point *out)
@@ -55,12 +56,12 @@ int sdk_query_history(plugin_ctx *ctx, semantic_type type, int64_t from_ts, int6
     // Receive potentially large response?
     // sdk_ipc_recv (MVP) only reads 4KB. Only empty responses work for now.
     // If response > 4KB, this breaks. Alpha Limitation.
-    char *resp_buf = malloc(4096);
+    char *resp_buf = mem_alloc(4096);
     if (!resp_buf) return -1;
 
     if (sdk_ipc_recv(ctx, resp_buf, 4096) < 0)
     {
-        free(resp_buf);
+        mem_free(resp_buf);
         return -1;
     }
 
@@ -68,7 +69,7 @@ int sdk_query_history(plugin_ctx *ctx, semantic_type type, int64_t from_ts, int6
     // Using sdk_json helper would require implementing a parser?
     // sdk_json_parse uses cJSON.
     json_value *root = sdk_json_parse(resp_buf);
-    free(resp_buf);
+    mem_free(resp_buf);
     if (!root) return -1;
 
     size_t count = (size_t) sdk_json_int(sdk_json_get(root, "count"));
@@ -89,7 +90,7 @@ int sdk_query_history(plugin_ctx *ctx, semantic_type type, int64_t from_ts, int6
         return -1;
     }
 
-    sdk_data_point *points = calloc(count, sizeof(sdk_data_point));
+    sdk_data_point *points = mem_alloc(count * sizeof(*points));
     if (!points)
     {
         sdk_json_free(root);
@@ -115,7 +116,7 @@ void sdk_data_point_destroy(sdk_data_point **points_ptr)
 {
     if (points_ptr && *points_ptr)
     {
-        free(*points_ptr);
+        mem_free(*points_ptr);
         *points_ptr = NULL;
     }
 }

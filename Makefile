@@ -13,14 +13,14 @@
 
 # Compiler Settings
 CC = gcc
-CFLAGS_COMMON = -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -DLOG_USE_COLOR -Wall -Wextra -pthread -I libs -I include -I src -I .
+CFLAGS_COMMON = -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -DLOG_USE_COLOR -Wall -Wextra -pthread -I libs -I include -I src -I . -I libs/duckdb
 CFLAGS_DEBUG = $(CFLAGS_COMMON) -g -fsanitize=address,undefined -fno-omit-frame-pointer
 CFLAGS_RELEASE = $(CFLAGS_COMMON) -O2 -DNDEBUG
 
 # Filter out flags incompatible with clang-tidy
 LINT_FLAGS = $(filter-out -fsanitize%, $(CFLAGS_DEBUG))
 
-LDFLAGS_COMMON = -lcurl -ldl -lm
+LDFLAGS_COMMON = -lcurl -ldl -lm -Llibs/duckdb -lduckdb -Wl,-rpath,'$$ORIGIN/../../libs/duckdb'
 LDFLAGS_DEBUG = $(LDFLAGS_COMMON) -fsanitize=address,undefined
 
 # Directories
@@ -30,7 +30,8 @@ BIN_DIR = $(BUILD_DIR)/bin
 
 # Sources
 SRC = src/main.c src/server.c src/core/ipc.c src/core/semantic_types.c \
-      src/core/plugin_mgr.c src/core/config.c src/db/csv_backend.c \
+      src/core/plugin_mgr.c src/core/config.c src/core/memory.c src/db/db.c src/db/csv_backend.c \
+      src/db/duckdb_backend.c \
       src/net/tcp_server.c src/net/http_parse.c src/net/http_server.c
 # Convert src/%.c to build/obj/src/%.o
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
@@ -114,6 +115,7 @@ UNIT_TESTS = tests/unit/test_http_parse.c \
              tests/unit/test_ipc.c \
              tests/unit/test_plugin_mgr.c \
              tests/unit/test_http_server.c \
+             tests/unit/test_duckdb_backend.c \
              tests/unit/test_lps.c
 
 TEST_RUNNER_SRC = tests/test_runner.c
@@ -122,7 +124,11 @@ TEST_RUNNER_SRC = tests/test_runner.c
 TEST_DEPS_OBJ = $(OBJ_DIR)/src/net/http_parse.o \
                 $(OBJ_DIR)/src/net/json.o \
                 $(OBJ_DIR)/src/core/semantic_types.o \
+                $(OBJ_DIR)/src/core/config.o \
+                $(OBJ_DIR)/src/core/memory.o \
+                $(OBJ_DIR)/src/db/db.o \
                 $(OBJ_DIR)/src/db/csv_backend.o \
+                $(OBJ_DIR)/src/db/duckdb_backend.o \
                 $(OBJ_DIR)/src/core/ipc.o \
                 $(OBJ_DIR)/src/core/plugin_mgr.o \
                 $(OBJ_DIR)/src/net/http_server.o \
@@ -173,6 +179,7 @@ SDK_SRC = src/sdk/lifecycle.c src/sdk/scheduler.c src/sdk/ipc.c \
           src/sdk/json.c src/sdk/state.c src/sdk/query.c \
           src/sdk/api.c src/core/semantic_types.c \
           src/net/http_client.c src/net/json.c \
+          src/core/memory.c \
           libs/cJSON.c
 
 SDK_OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SDK_SRC))
@@ -210,12 +217,12 @@ plugins: sdk $(PLUGIN_BINS)
 $(BIN_DIR)/plugins/%: plugins/in/%/main.c $(BUILD_DIR)/lib/libheimwatt_sdk.a
 	@mkdir -p $(dir $@)
 	@echo ">> Building plugin: $*"
-	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR)/lib -lheimwatt_sdk $(LDFLAGS) || echo ">> WARN: Plugin $* failed to build (skipped)"
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR)/lib -lheimwatt_sdk $(LDFLAGS) -Wl,-rpath,'$$ORIGIN/../../../libs/duckdb' || echo ">> WARN: Plugin $* failed to build (skipped)"
 
 $(BIN_DIR)/plugins/%: plugins/out/%/main.c $(BUILD_DIR)/lib/libheimwatt_sdk.a
 	@mkdir -p $(dir $@)
 	@echo ">> Building plugin: $*"
-	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR)/lib -lheimwatt_sdk $(LDFLAGS) || echo ">> WARN: Plugin $* failed to build (skipped)"
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR)/lib -lheimwatt_sdk $(LDFLAGS) -Wl,-rpath,'$$ORIGIN/../../../libs/duckdb' || echo ">> WARN: Plugin $* failed to build (skipped)"
 
 # List discovered plugins (for debugging)
 list-plugins:

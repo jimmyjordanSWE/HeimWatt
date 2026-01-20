@@ -10,13 +10,19 @@ extern void file_backend_setUp(void);
 extern void file_backend_tearDown(void);
 extern void plugin_mgr_setUp(void);
 extern void plugin_mgr_tearDown(void);
+extern void duckdb_backend_setUp(void);
+extern void duckdb_backend_tearDown(void);
+extern void test_duckdb_insert_query(void);
+extern void test_duckdb_persistence(void);
+extern void test_duckdb_query_range(void);
 
 static int current_test_group = 0;
 enum
 {
     GROUP_DEFAULT = 0,
     GROUP_FILE_BACKEND,
-    GROUP_PLUGIN_MGR
+    GROUP_PLUGIN_MGR,
+    GROUP_DUCKDB_BACKEND
 };
 
 void setUp(void)
@@ -28,6 +34,9 @@ void setUp(void)
             break;
         case GROUP_PLUGIN_MGR:
             plugin_mgr_setUp();
+            break;
+        case GROUP_DUCKDB_BACKEND:
+            duckdb_backend_setUp();
             break;
         default:
             break;
@@ -43,6 +52,9 @@ void tearDown(void)
             break;
         case GROUP_PLUGIN_MGR:
             plugin_mgr_tearDown();
+            break;
+        case GROUP_DUCKDB_BACKEND:
+            duckdb_backend_tearDown();
             break;
         default:
             break;
@@ -214,6 +226,13 @@ int main(void)
     RUN_TEST(test_lps_full_battery_start);
     RUN_TEST(test_lps_storm_mode);
     RUN_TEST(test_lps_performance_48h);
+
+    // ======== DuckDB Tests ========
+    current_test_group = GROUP_DUCKDB_BACKEND;
+    RUN_TEST(test_duckdb_insert_query);
+    RUN_TEST(test_duckdb_persistence);
+    RUN_TEST(test_duckdb_query_range);
+    current_test_group = GROUP_DEFAULT;
 
     return UNITY_END();
 }
