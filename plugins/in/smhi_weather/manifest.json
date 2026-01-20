@@ -14,7 +14,7 @@
     "raw": []
   },
   "config": {
-    "url_forecast": "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/18.0686/lat/59.3293/data.json",
+    "url_forecast": "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/{lon}/lat/{lat}/data.json",
     "url_history_temp": "https://opendata-download-metobs.smhi.se/api/version/1.0/parameter/1/station/98210/period/latest-months/data.json",
     "url_history_humid": "https://opendata-download-metobs.smhi.se/api/version/1.0/parameter/6/station/98210/period/latest-months/data.json"
   },

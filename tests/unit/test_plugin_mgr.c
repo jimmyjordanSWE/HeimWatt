@@ -13,8 +13,8 @@
 #include "core/plugin_mgr.h"
 #include "libs/unity/unity.h"
 
-static char test_dir[256];
-static char test_sock[256];
+static char test_dir[512];
+static char test_sock[512];
 
 void plugin_mgr_setUp(void)
 {
@@ -22,13 +22,19 @@ void plugin_mgr_setUp(void)
     char *result = mkdtemp(test_dir);
     TEST_ASSERT_NOT_NULL_MESSAGE(result, "Failed to create temp dir");
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(test_sock, sizeof(test_sock), "%s/ipc.sock", test_dir);
+#pragma GCC diagnostic pop
 }
 
 void plugin_mgr_tearDown(void)
 {
-    char cmd[512];
+    char cmd[1024];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
+#pragma GCC diagnostic pop
     (void) system(cmd);
 }
 
@@ -80,14 +86,17 @@ void test_plugin_mgr_scan_empty_dir(void)
 void test_plugin_mgr_scan_with_manifest(void)
 {
     // Create subdirectories for plugins
-    char in_dir[512], plugin_dir[512], manifest_path[512];
+    char in_dir[1024], plugin_dir[1024], manifest_path[1024];
     snprintf(in_dir, sizeof(in_dir), "%s/in", test_dir);
     mkdir(in_dir, 0755);
     snprintf(plugin_dir, sizeof(plugin_dir), "%s/in/test_plugin", test_dir);
     mkdir(plugin_dir, 0755);
 
     // Create minimal manifest.json
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.json", plugin_dir);
+#pragma GCC diagnostic pop
     FILE *f = fopen(manifest_path, "w");
     TEST_ASSERT_NOT_NULL(f);
     fprintf(f, "{\"id\": \"com.test.plugin\", \"type\": \"in\", \"version\": \"1.0.0\"}");

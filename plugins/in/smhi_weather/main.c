@@ -91,19 +91,18 @@ static void on_tick(plugin_ctx *ctx, int64_t now)
 {
     int64_t real_now = time(NULL);
 
-    // --- Backfill Mode ---
-    if (now < real_now - 3600)
+    // --- Backfill Mode (Run once on startup) ---
+    if (!history_fetched)
     {
-        if (!history_fetched)
-        {
-            sdk_log(ctx, SDK_LOG_INFO, "Triggering one-time history fetch...");
-            // Look for keys like "url_obs_temp", "url_obs_humid"
-            fetch_obs(ctx, "url_history_temp", TYPE_TEMP);
-            fetch_obs(ctx, "url_history_humid", TYPE_HUMID);
-            history_fetched = true;
-        }
-        return;
+        sdk_log(ctx, SDK_LOG_INFO, "Triggering one-time history fetch...");
+        // Look for keys like "url_obs_temp", "url_obs_humid"
+        fetch_obs(ctx, "url_history_temp", TYPE_TEMP);
+        fetch_obs(ctx, "url_history_humid", TYPE_HUMID);
+        history_fetched = true;
     }
+
+    // Continue to Realtime...
+    if (now < real_now - 3600) return;  // Still skip realtime if way back in past (safety)
 
     // --- Realtime / Forecast Mode ---
     sdk_log(ctx, SDK_LOG_INFO, "Running tick - Forecast Mode (now=%ld)", now);

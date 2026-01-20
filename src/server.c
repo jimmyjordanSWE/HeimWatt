@@ -3,6 +3,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <math.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -12,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "core/config.h"
 #include "core/ipc.h"
 #include "core/plugin_mgr.h"
 #include "db.h"
@@ -54,6 +56,10 @@ struct heimwatt_ctx
 
     // Connection Lock (Protect conns array and registry)
     pthread_mutex_t conn_lock;
+    // Global Config
+    double lat;
+    double lon;
+    char area[16];
 };
 
 // Global for signal handling if needed, but we pass ctx via args
@@ -342,14 +348,50 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
     log_info("[INIT] HeimWatt Core starting...");
     log_info("[INIT] Storage path: %s", path);
 
+    // 0.5 Load Config
+    config *cfg = config_create();
+    char config_path[256];
+    char db_open_path[512];
+    snprintf(config_path, sizeof(config_path), "config/heimwatt.json");
+    if (config_load(cfg, config_path) == 0)
+    {
+        const char *loc_name = config_get_loc_name(cfg);
+        log_info("[INIT] Config loaded. CSV Interval: %ds, Location: %s",
+                 config_get_csv_interval(cfg), loc_name);
+
+        ctx->lat = config_get_lat(cfg);
+        ctx->lon = config_get_lon(cfg);
+        snprintf(ctx->area, sizeof(ctx->area), "%s", config_get_area(cfg));
+
+        // Use location name in DB path if not default
+        if (strcmp(loc_name, "default") != 0)
+        {
+            // Append coordinates to disambiguate locations (e.g., stockholm_59.33N_18.07E)
+            char lat_dir = (ctx->lat >= 0) ? 'N' : 'S';
+            char lon_dir = (ctx->lon >= 0) ? 'E' : 'W';
+            snprintf(db_open_path, sizeof(db_open_path), "%s/%s_%.2f%c_%.2f%c", path, loc_name,
+                     fabs(ctx->lat), lat_dir, fabs(ctx->lon), lon_dir);
+        }
+        else
+        {
+            snprintf(db_open_path, sizeof(db_open_path), "%s/default", path);
+        }
+    }
+    else
+    {
+        snprintf(db_open_path, sizeof(db_open_path), "%s/default", path);
+    }
+
     // 1. Open DB
-    ret = db_open(&ctx->db, path);
+    ret = db_open(&ctx->db, db_open_path);
     if (ret < 0)
     {
-        log_error("[INIT] Failed to open DB at %s: %s", path,
-                  db_error_message(ctx->db) ? db_error_message(ctx->db) : strerror(-ret));
+        log_error("[INIT] Failed to open DB at %s: %s", db_open_path, strerror(-ret));
+        config_destroy(&cfg);
         goto cleanup;
     }
+    db_set_interval(ctx->db, config_get_csv_interval(cfg));
+    config_destroy(&cfg);
     log_info("[INIT] Database opened: %s", path);
 
     // 1.5 Initialize Plugin Manager
@@ -363,7 +405,18 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
 
     // 1.6 Scan and start plugins
     plugin_mgr_scan(ctx->plugins);
-    (void) plugin_mgr_validate(ctx->plugins);  // Warn about missing executables
+    (void) plugin_mgr_validate(ctx->plugins);
+
+    // 1.7 Check dependencies and bootstrap if DB is empty
+    bool needs_bootstrap = db_is_empty(ctx->db);
+    if (needs_bootstrap)
+    {
+        log_info("[INIT] Empty database detected - will attempt to bootstrap required data");
+    }
+
+    // Reports dependencies and triggers bootstrap fetch if needs_bootstrap is true
+    const char *missing_path = "logs/missing_providers.log";
+    (void) plugin_mgr_validate_dependencies(ctx->plugins, missing_path, needs_bootstrap);
 
     // 2. Start IPC (before plugins so they can connect)
     ret = ipc_server_init(&ctx->ipc, socket_path);
@@ -448,21 +501,44 @@ static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
         cJSON *key = cJSON_GetObjectItem(json, "key");
         if (key && key->valuestring)
         {
-            char resp[1024];
+            char resp[2048];
             const char *k = key->valuestring;
-            const char *v = "";
 
-            // Mock Config Mapping
-            if (strcmp(k, "url_forecast") == 0)
-                v = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/"
-                    "geotype/point/lon/18.0686/lat/59.3293/data.json";
-            else if (strcmp(k, "url_history_temp") == 0)
-                v = "https://opendata-download-metobs.smhi.se/api/version/1.0/parameter/1/station/"
-                    "98210/period/latest-months/data.json";
+            const char *src = plugin_mgr_get_config(ctx->plugins, from, k);
+            if (!src) src = "";  // Or send error/empty
 
-            log_debug("[IPC] Config request: key='%s' -> value='%.50s...'", k, v);
+            // Perform Variable Substitution
+            char final_val[1024];
+            char *dst = final_val;
+            char *end = final_val + sizeof(final_val) - 1;
 
-            (void) snprintf(resp, sizeof(resp), "{\"val\":\"%s\"}\n", v);
+            while (*src && dst < end)
+            {
+                if (strncmp(src, "{lat}", 5) == 0)
+                {
+                    dst += snprintf(dst, end - dst, "%.4f", ctx->lat);
+                    src += 5;
+                }
+                else if (strncmp(src, "{lon}", 5) == 0)
+                {
+                    dst += snprintf(dst, end - dst, "%.4f", ctx->lon);
+                    src += 5;
+                }
+                else if (strncmp(src, "{area}", 6) == 0)
+                {
+                    dst += snprintf(dst, end - dst, "%s", ctx->area);
+                    src += 6;
+                }
+                else
+                {
+                    *dst++ = *src++;
+                }
+            }
+            *dst = '\0';
+
+            log_debug("[IPC] Config request: key='%s' -> val='%s'", k, final_val);
+
+            (void) snprintf(resp, sizeof(resp), "{\"val\":\"%s\"}\n", final_val);
             ipc_conn_send(conn, resp, strlen(resp));
         }
     }
@@ -631,6 +707,40 @@ static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
             http_response_destroy(&resp);
         }
     }
+    else if (strcmp(cmd->valuestring, "request_data") == 0)
+    {
+        // Calculator requesting on-demand data fetch
+        cJSON *types = cJSON_GetObjectItem(json, "semantic_types");
+        if (types && cJSON_IsArray(types))
+        {
+            log_info("[IPC] Data request from %s for %d types", from, cJSON_GetArraySize(types));
+
+            cJSON *type_item = NULL;
+            cJSON_ArrayForEach(type_item, types)
+            {
+                if (cJSON_IsString(type_item))
+                {
+                    const char *semantic_type = type_item->valuestring;
+                    const char **providers = find_providers_for_type(ctx->plugins, semantic_type);
+
+                    if (!providers || !providers[0])
+                    {
+                        log_warn("[IPC] No provider for %s (requested by %s)", semantic_type, from);
+                    }
+                    else
+                    {
+                        log_info("[IPC] Would trigger %s to fetch %s", providers[0], semantic_type);
+                        // Note: Full IPC routing to send fetch_now to specific plugin
+                        // requires connection map (plugin_id -> ipc_conn)
+                        // This infrastructure works; production would need connection tracking
+                    }
+                }
+            }
+
+            char resp[] = "{\"status\":\"acknowledged\"}\n";
+            ipc_conn_send(conn, resp, strlen(resp));
+        }
+    }
     else if (strcmp(cmd->valuestring, "log") == 0)
     {
         // Echo log from plugin
@@ -724,6 +834,9 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
             if (errno == EINTR) continue;
             break;
         }
+
+        // CSV Backend Tick (Flush check)
+        db_tick(ctx->db);
 
         // Check Server
         if (fds[0].revents & POLLIN)

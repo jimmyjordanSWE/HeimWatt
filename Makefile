@@ -30,13 +30,13 @@ BIN_DIR = $(BUILD_DIR)/bin
 
 # Sources
 SRC = src/main.c src/server.c src/core/ipc.c src/core/semantic_types.c \
-      src/core/plugin_mgr.c src/db/sqlite_backend.c \
+      src/core/plugin_mgr.c src/core/config.c src/db/csv_backend.c \
       src/net/tcp_server.c src/net/http_parse.c src/net/http_server.c
 # Convert src/%.c to build/obj/src/%.o
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
 
 # Libs
-LIBS_SRC = libs/cJSON.c libs/sqlite3.c libs/log.c
+LIBS_SRC = libs/cJSON.c libs/log.c
 LIBS_OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIBS_SRC))
 CFLAGS_LIBS = -std=c99 -D_GNU_SOURCE -DLOG_USE_COLOR -pthread -g -w
 
@@ -122,7 +122,7 @@ TEST_RUNNER_SRC = tests/test_runner.c
 TEST_DEPS_OBJ = $(OBJ_DIR)/src/net/http_parse.o \
                 $(OBJ_DIR)/src/net/json.o \
                 $(OBJ_DIR)/src/core/semantic_types.o \
-                $(OBJ_DIR)/src/db/sqlite_backend.o \
+                $(OBJ_DIR)/src/db/csv_backend.o \
                 $(OBJ_DIR)/src/core/ipc.o \
                 $(OBJ_DIR)/src/core/plugin_mgr.o \
                 $(OBJ_DIR)/src/net/http_server.o \

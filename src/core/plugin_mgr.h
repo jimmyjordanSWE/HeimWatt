@@ -175,6 +175,7 @@ time_t plugin_handle_last_run(const plugin_handle *h);
  * Get plugin resource name.
  */
 const char *plugin_handle_resource(const plugin_handle *h);
+const char *plugin_mgr_get_config(plugin_mgr *mgr, const char *plugin_id, const char *key);
 
 /**
  * Set plugin last run timestamp.
@@ -202,6 +203,37 @@ typedef void (*plugin_iter_fn)(const plugin_handle *h, void *userdata);
  * @param userdata User data passed to callback
  */
 void plugin_mgr_foreach(plugin_mgr *mgr, plugin_iter_fn fn, void *userdata);
+
+/* ============================================================
+ * METADATA ACCESSORS
+ * ============================================================ */
+
+/**
+ * Get list of semantic types provided by this plugin.
+ * @param h Plugin handle
+ * @return NULL-terminated array of semantic type names
+ */
+const char **plugin_get_provided_types(const plugin_handle *h);
+
+/**
+ * Find all providers for a given semantic type.
+ * @param mgr Plugin manager
+ * @param semantic_type Semantic type ID
+ * @return NULL-terminated array of plugin IDs
+ */
+const char **find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type);
+
+/**
+ * Validate dependencies for all plugins.
+ * Prints reports to stdout about available providers and missing dependencies.
+ * Also generates a report of all missing semantic types in the system.
+ * @param mgr Plugin manager
+ * @param report_path Path to write the missing providers log
+ * @param auto_bootstrap If true, attempts to trigger fetch for satisfied dependencies
+ * @return 0 if valid, >0 if missing dependencies
+ */
+int plugin_mgr_validate_dependencies(const plugin_mgr *mgr, const char *report_path,
+                                     bool auto_bootstrap);
 
 /* ============================================================
  * SUPERVISION

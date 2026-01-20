@@ -2,63 +2,49 @@
 
 > **Vision**: An extensible, local-first data platform for energy optimization.
 
-## How it works
-HeimWatt is a modular broker that ingests data from **IN plugins** (weather, prices, sensors), stores it by semantic type, and routes queries to **OUT plugins** (Solvers, controllers, schedulers) that serve results via REST API.
+HeimWatt is a high-performance, modular broker that optimizes home energy usage by intelligenty scheduling flexible loads (heat pumps, EVs, batteries) based on dynamic electricity prices and house physics.
 
-# Default plugins
-- OUT: Complete energy strategy solver as described in [Solver.md](Solver.md)
-- live and historical grid energy usage via connection to ?( there are two .png files in root describing the box you connect to in the main house electricity connection box for getting this data. Its hardware, not a api unfortunately. Suggest solutions here. What hardware should we support? IS there a simplr way? put a box in the house instead of at the pole on the street? We must have the actual usage.)
-- IN: Nordic and german weather data
-- IN: Nordic and german spot prices
-- IN: Complete set of simulated sensors and appliances for a standard swedish "villa" house ( For simulation and testing )
-- house physics are derived automatically when we have enough sensors and data. (heat loss etc) But provide options to run scheduled tests. For example homeowner is away over the weekend. Measure heat loss for each room and speed of heating at X powerlevels etc.  
+## Documentation
 
-## Funcitonality
-### Web user interface
-All functionality of the program is governed by json config files. These are created graphically in the UI. So EVERYTHING in the program is controlled via the web UI. 
-Goal is to make it extremely simple to: 
-- Specify hardware, "luftvärmepump" "varmvattenberedare", "golvärme"etc. Create a plugin enable plugin and connect tu ti the appliance.
-- specify in data sources. LLM integration to generate plugins from external API documentation. For data ingestion. 
-- The solver needs a complex set of inputs, machines availible constraints, sensors etc. All is defined and connected in the nodemased editor. You make devices then bind them together in rooms and set your constraints. (car must be charged at 07:00 every weekday, but can be 40% on weekends, hallway can be 18c, but babys room must be 23c, etc.)
+- **[Current State](docs/current_state.md)**: Technical architecture, recent performance updates (epoll/async), and status.
+- **[Target Vision](docs/target_state.md)**: The "Single Pane of Glass" concept, Solver logic, and final architecture.
+- **[Roadmap](docs/roadmap.md)**: The plan to get from Alpha to V1.0.
 
-## Status
-> HEAVY WIP. Moving fast, breaking things.
+## Quick Start
+
+### Prerequisites
+- Linux (POSIX)
+- Clang / GCC
+- Make
+
+### Build & Run
+```bash
+# Build the project
+make
+
+# Run the server
+./build/heimwatt
+
+# Run with debug logging
+make debug && ./build/heimwatt
+```
 
 ## Tech Stack
 
 | Component | Choice |
 |-----------|--------|
-| Language | C99 |
-| Compiler | Clang |
-| Build | Makefile |
-| Target | Linux (POSIX) |
+| **Core** | C99 (Clang optimized) |
+| **I/O** | `epoll` non-blocking event loop |
+| **Database** | CSV (Configurable Interval) |
+| **Web UI** | React + Vite |
+| **Protocols** | HTTP/1.1, Unix Domain Sockets |
 
-| Library | Purpose |
-|---------|---------|
-| cJSON | JSON parsing |
-| SQLite | Database |
-| libcurl | HTTP client |
-| vite |web build tool|
-| react |web UI|
-| litegraph.js | Node editor |
+## Architecture Overview
 
-
----
-
-## Quick Start
-
-```bash
-# Build
-make
-
-# Run
-./build/heimwatt
-
-# Run with debug
-make debug && ./build/heimwatt
-```
-
----
+HeimWatt operates on a **Pure Broker** model:
+1.  **Core**: Routes messages, stores semantic data, manages lifecycle. Zero domain knowledge.
+2.  **Plugins**: Separate processes that provide intelligence (Weather, Pricing, Device Control).
+3.  **Solver**: Optimizes power schedules based on inputs.
 
 ## License
 

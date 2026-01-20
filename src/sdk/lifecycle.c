@@ -341,6 +341,20 @@ int sdk_run(plugin_ctx *ctx)
                         }
                     }
                 }
+                else if (cmd && cmd->valuestring && strcmp(cmd->valuestring, "fetch_now") == 0)
+                {
+                    // Server requesting immediate fetch
+                    sdk_log(ctx, SDK_LOG_INFO, "Received fetch_now command from server");
+
+                    // Trigger all tickers immediately
+                    int64_t now = time(NULL);
+                    for (int i = 0; i < ctx->ticker_count; i++)
+                    {
+                        ctx->tickers[i].handler(ctx, now);
+                        // Reset next run to maintain schedule
+                        ctx->tickers[i].next_run = now + ctx->tickers[i].interval_sec;
+                    }
+                }
                 cJSON_Delete(json);
             }
         }

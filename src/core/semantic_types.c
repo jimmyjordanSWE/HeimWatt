@@ -3,7 +3,8 @@
 #include <string.h>
 
 // X-Macro expansion to populate the lookup table
-#define X(suffix, id, unit, desc) [SEM_##suffix] = {SEM_##suffix, id, unit, desc},
+// X-Macro expansion to populate the lookup table
+#define X(suffix, id, unit, desc) [SEM_##suffix] = {SEM_##suffix, id, #suffix, unit, desc},
 
 static const semantic_meta META_TABLE[SEM_TYPE_COUNT] = {HEIMWATT_SEMANTIC_TYPES(X)};
 #undef X
@@ -27,6 +28,11 @@ semantic_type semantic_from_string(const char *id)
     for (int i = 1; i < SEM_TYPE_COUNT; i++)
     {
         if (strcmp(META_TABLE[i].id, id) == 0)
+        {
+            return (semantic_type) i;
+        }
+        // Fallback: Check enum name (e.g. "ATMOSPHERE_TEMPERATURE")
+        if (strcmp(META_TABLE[i].enum_name, id) == 0)
         {
             return (semantic_type) i;
         }

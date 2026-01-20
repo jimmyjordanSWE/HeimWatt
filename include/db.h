@@ -220,11 +220,31 @@ void db_free(void *ptr);
 int db_prune_tier1(db_handle *db, semantic_type type, int64_t before_ts);
 
 /**
- * @brief Run database maintenance (vacuum, optimize, etc.).
+ * @brief periodic tick for time-based operations (like CSV flushing).
  *
  * @param db Database handle.
- * @return 0 on success, error code on failure.
+ * @return 0 on success.
  */
+int db_tick(db_handle *db);
+
+/**
+ * @brief Set the flush interval for CSV backend.
+ *
+ * @param db Database handle.
+ * @param interval_sec Seconds between flushes.
+ */
+void db_set_interval(db_handle *db, int interval_sec);
+
+/**
+ * @brief Check if database is empty (no data points).
+ *
+ * Used for bootstrap detection on server startup.
+ *
+ * @param db Database handle.
+ * @return 1 if empty, 0 if has data, negative on error.
+ */
+int db_is_empty(db_handle *db);
+
 int db_maintenance(db_handle *db);
 
 #endif /* HEIMWATT_DB_H */

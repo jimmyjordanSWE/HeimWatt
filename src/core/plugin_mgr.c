@@ -13,11 +13,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include "libs/cJSON.h"
-#include "log.h"
+#include "libs/log.h"
+#include "semantic_types.h"
 
 enum
 {
@@ -36,7 +39,11 @@ struct plugin_handle
     pid_t pid;
     int interval;
     time_t last_run;
+    time_t next_run;  // Next aligned run time
     char resource[MAX_ID_LEN];
+    cJSON *config_json;    // Store entire config object
+    cJSON *provides_json;  // Store provides object for dynamic queries
+    cJSON *requires_json;  // Store requires list for dependency checking
 };
 
 struct plugin_mgr
@@ -52,6 +59,9 @@ int plugin_mgr_count(const plugin_mgr *mgr) { return mgr ? mgr->count : 0; }
 /* ============================================================
  * HELPERS
  * ============================================================ */
+
+// Forward declaration
+static time_t calculate_next_aligned_time(int interval_sec);
 
 /**
  * Convert plugin ID to executable name.
@@ -168,6 +178,27 @@ static int load_manifest(const char *manifest_path, plugin_handle *h)
         h->interval = 60;  // Default
     }
 
+    // Extract "config" object
+    cJSON *config_item = cJSON_GetObjectItem(json, "config");
+    if (config_item)
+    {
+        h->config_json = cJSON_Duplicate(config_item, 1);
+    }
+
+    // Extract "provides" object for dynamic metadata queries
+    cJSON *provides_item = cJSON_GetObjectItem(json, "provides");
+    if (provides_item)
+    {
+        h->provides_json = cJSON_Duplicate(provides_item, 1);
+    }
+
+    // Extract "requires" array for dependency checking
+    cJSON *requires_item = cJSON_GetObjectItem(json, "requires");
+    if (requires_item)
+    {
+        h->requires_json = cJSON_Duplicate(requires_item, 1);
+    }
+
     cJSON_Delete(json);
     return 0;
 }
@@ -193,6 +224,27 @@ int plugin_mgr_init(plugin_mgr **mgr, const char *plugins_dir, const char *ipc_s
 void plugin_mgr_destroy(plugin_mgr **mgr)
 {
     if (!mgr || !*mgr) return;
+
+    // Free config_json and provides_json for each plugin to prevent memory leaks
+    for (int i = 0; i < (*mgr)->count; i++)
+    {
+        if ((*mgr)->plugins[i].config_json)
+        {
+            cJSON_Delete((*mgr)->plugins[i].config_json);
+            (*mgr)->plugins[i].config_json = NULL;
+        }
+        if ((*mgr)->plugins[i].provides_json)
+        {
+            cJSON_Delete((*mgr)->plugins[i].provides_json);
+            (*mgr)->plugins[i].provides_json = NULL;
+        }
+        if ((*mgr)->plugins[i].requires_json)
+        {
+            cJSON_Delete((*mgr)->plugins[i].requires_json);
+            (*mgr)->plugins[i].requires_json = NULL;
+        }
+    }
+
     free(*mgr);
     *mgr = NULL;
 }
@@ -245,6 +297,7 @@ int plugin_mgr_scan(plugin_mgr *mgr)
             (void) snprintf(h->exe_path, sizeof(h->exe_path), "build/bin/plugins/%s", exe_name);
 
             h->state = PLUGIN_STATE_STOPPED;
+            h->next_run = calculate_next_aligned_time(h->interval);  // Set initial aligned time
             mgr->count++;
             found++;
 
@@ -445,6 +498,19 @@ void plugin_mgr_set_last_run(plugin_mgr *mgr, const char *plugin_id, time_t ts)
 
 const char *plugin_handle_resource(const plugin_handle *h) { return h ? h->resource : "Unknown"; }
 
+const char *plugin_mgr_get_config(plugin_mgr *mgr, const char *plugin_id, const char *key)
+{
+    plugin_handle *h = plugin_mgr_get(mgr, plugin_id);
+    if (!h || !h->config_json) return NULL;
+
+    cJSON *item = cJSON_GetObjectItem(h->config_json, key);
+    if (item && item->valuestring)
+    {
+        return item->valuestring;
+    }
+    return NULL;
+}
+
 /* ============================================================
  * ITERATION
  * ============================================================ */
@@ -528,4 +594,257 @@ int plugin_mgr_check_health(plugin_mgr *mgr)
     }
 
     return restarted;
+}
+/* ============================================================
+ * METADATA ACCESSORS
+ * ============================================================ */
+
+/**
+ * Get list of semantic types provided by this plugin.
+ * Returns NULL-terminated array of string pointers.
+ */
+const char **plugin_get_provided_types(const plugin_handle *h)
+{
+    static const char *types[65];
+
+    if (!h || !h->provides_json)
+    {
+        types[0] = NULL;
+        return types;
+    }
+
+    cJSON *known = cJSON_GetObjectItem(h->provides_json, "known");
+    if (!known || !cJSON_IsArray(known))
+    {
+        types[0] = NULL;
+        return types;
+    }
+
+    int count = cJSON_GetArraySize(known);
+    for (int i = 0; i < count && i < 64; i++)
+    {
+        cJSON *item = cJSON_GetArrayItem(known, i);
+        if (cJSON_IsString(item))
+        {
+            // Manifest has uppercase enum names like "ATMOSPHERE_TEMPERATURE"
+            // Convert to semantic ID like "atmosphere.temperature"
+            semantic_type sem_type = semantic_from_string(item->valuestring);
+            if (sem_type != SEM_UNKNOWN)
+            {
+                const semantic_meta *meta = semantic_get_meta(sem_type);
+                if (meta)
+                {
+                    types[i] = meta->id;
+                    continue;
+                }
+            }
+            // Fallback: use as-is if conversion fails
+            types[i] = item->valuestring;
+        }
+    }
+    types[count < 64 ? count : 64] = NULL;
+
+    return types;
+}
+
+/**
+ * Find all providers for a given semantic type.
+ * Returns NULL-terminated array of plugin IDs sorted by priority.
+ */
+const char **find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type)
+{
+    static const char *providers[33];
+
+    if (!mgr || !semantic_type)
+    {
+        providers[0] = NULL;
+        return providers;
+    }
+
+    int count = 0;
+    for (int i = 0; i < mgr->count && count < 32; i++)
+    {
+        const plugin_handle *h = &mgr->plugins[i];
+        const char **types = plugin_get_provided_types(h);
+
+        for (int j = 0; types[j] != NULL; j++)
+        {
+            if (strcmp(types[j], semantic_type) == 0)
+            {
+                providers[count++] = h->id;
+                break;
+            }
+        }
+    }
+    providers[count] = NULL;
+
+    // TODO: Sort by priority (for now, discovery order = priority)
+    return providers;
+}
+/* ============================================================
+ * ALIGNED SCHEDULING
+ * ============================================================ */
+
+/**
+ * Calculate next aligned run time for a plugin.
+ * Aligns to clock boundaries (e.g., :00, :15, :30, :45 for 15-min intervals)
+ *
+ * @param interval_sec Plugin interval in seconds
+ * @return Next aligned timestamp
+ */
+static time_t calculate_next_aligned_time(int interval_sec)
+{
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+
+    if (interval_sec < 60)
+    {
+        // Sub-minute intervals: align to next minute boundary
+        tm.tm_sec = 0;
+        tm.tm_min++;
+        return mktime(&tm);
+    }
+    else if (interval_sec < 3600)
+    {
+        // Sub-hour intervals: align to minute boundaries
+        int interval_min = interval_sec / 60;
+        int current_min = tm.tm_min;
+        int next_min = ((current_min / interval_min) + 1) * interval_min;
+
+        if (next_min >= 60)
+        {
+            next_min = 0;
+            tm.tm_hour++;
+        }
+        tm.tm_min = next_min;
+        tm.tm_sec = 0;
+        return mktime(&tm);
+    }
+    else
+    {
+        // Hourly+: align to top of hour
+        tm.tm_min = 0;
+        tm.tm_sec = 0;
+        tm.tm_hour++;
+        return mktime(&tm);
+    }
+}
+
+/**
+ * Validate dependencies for all plugins.
+ * Prints reports to stdout about available providers and missing dependencies.
+ */
+int plugin_mgr_validate_dependencies(const plugin_mgr *mgr, const char *report_path,
+                                     bool auto_bootstrap)
+{
+    if (!mgr) return -1;
+
+    int missing_deps_count = 0;
+
+    // 1. Report Available Providers
+    log_info("[DEP] --- Available Data Providers ---");
+    for (int i = 0; i < mgr->count; i++)
+    {
+        const char **provides = plugin_get_provided_types(&mgr->plugins[i]);
+        if (provides && provides[0])
+        {
+            log_info("[DEP] %s provides:", mgr->plugins[i].id);
+            for (int j = 0; provides[j]; j++)
+            {
+                log_info("[DEP]   - %s", provides[j]);
+            }
+        }
+    }
+
+    // 2. Check Plugin Dependencies
+    log_info("[DEP] --- Checking Dependencies ---");
+    for (int i = 0; i < mgr->count; i++)
+    {
+        const plugin_handle *h = &mgr->plugins[i];
+        if (!h->requires_json || !cJSON_IsArray(h->requires_json)) continue;
+
+        cJSON *item = NULL;
+        cJSON_ArrayForEach(item, h->requires_json)
+        {
+            if (cJSON_IsString(item))
+            {
+                char sem_id[MAX_ID_LEN];
+                semantic_type type = semantic_from_string(item->valuestring);
+                const semantic_meta *meta = (type != SEM_UNKNOWN) ? semantic_get_meta(type) : NULL;
+
+                if (meta)
+                    snprintf(sem_id, sizeof(sem_id), "%s", meta->id);
+                else
+                    snprintf(sem_id, sizeof(sem_id), "%s", item->valuestring);
+
+                const char **providers = find_providers_for_type(mgr, sem_id);
+                if (!providers || !providers[0])
+                {
+                    log_warn("[DEP] \033[31mMISSING\033[0m: %s requires %s (No provider found)",
+                             h->id, sem_id);
+                    missing_deps_count++;
+                }
+                else
+                {
+                    log_info("[DEP] \033[32mSATISFIED\033[0m: %s requires %s -> Provided by %s",
+                             h->id, sem_id, providers[0]);
+
+                    if (auto_bootstrap)
+                    {
+                        log_info("[BOOTSTRAP] Attempting to fetch %s from %s...", sem_id,
+                                 providers[0]);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Global Coverage Report (User Requested)
+    if (report_path)
+    {
+        FILE *f = fopen(report_path, "w");
+        if (f)
+        {
+            int total_missing = 0;
+            int total_found = 0;
+
+            fprintf(f, "# Missing Providers Report\n");
+            fprintf(f, "# Generated: %ld\n\n", time(NULL));
+
+            for (int i = 1; i < SEM_TYPE_COUNT; i++)
+            {
+                const semantic_meta *meta = semantic_get_meta((semantic_type) i);
+                if (!meta) continue;
+
+                const char **p = find_providers_for_type(mgr, meta->id);
+                if (!p || !p[0])
+                {
+                    fprintf(f, "MISSING: %s (%s)\n", meta->id, meta->description);
+                    total_missing++;
+                }
+                else
+                {
+                    total_found++;
+                }
+            }
+            fclose(f);
+
+            if (total_missing > 0)
+            {
+                log_warn("[DEP] %d semantic types missing providers. See %s for details.",
+                         total_missing, report_path);
+            }
+            else
+            {
+                log_info("[DEP] All %d known semantic types have providers!", total_found);
+            }
+        }
+        else
+        {
+            log_warn("[DEP] Failed to write missing provider report to %s", report_path);
+        }
+    }
+
+    return missing_deps_count;
 }

@@ -10,10 +10,14 @@
 
 #include "types.h"
 
-/**
- * Core configuration structure.
- */
 typedef struct config config;
+
+config *config_create(void);
+int config_get_csv_interval(const config *cfg);
+const char *config_get_loc_name(const config *cfg);
+double config_get_lat(const config *cfg);
+double config_get_lon(const config *cfg);
+const char *config_get_area(const config *cfg);
 
 /**
  * Load configuration from JSON file.

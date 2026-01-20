@@ -160,6 +160,7 @@ typedef struct
 {
     semantic_type type;
     const char *id;
+    const char *enum_name;
     const char *unit;
     const char *description;
 } semantic_meta;
