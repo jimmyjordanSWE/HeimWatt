@@ -100,3 +100,37 @@ Most home battery systems (Victron, Huawei, SMA, Fronius) provide local interfac
 ### Implementation Strategy:
 - **Modbus TCP**: Many inverters expose Modbus TCP on the local network. This is the preferred method for real-time control (filling `storage.power`, `storage.soc`, etc.).
 - Checks if the device supports **SunSpec Alliance** models for standardized register mapping.
+
+---
+
+## 5. Local Network Plugins (Home Automation)
+**Recommended Approach:** Zigbee2MQTT / Local APIs (IKEA, Shelly)
+
+For specialized local control of lights, sensors, and smart plugs, leveraging existing local infrastructure is best.
+
+### A. IKEA Home Smart (Tradfri/Dirigera)
+- **Tradfri Ecosystem**:
+  - Uses Zigbee for device communication.
+  - The **Tradfri Gateway** uses **CoAP (Constrained Application Protocol)** with DTLS for security. It is fully local.
+  - The newer **Dirigera Hub** exposes a **RESTful WebSocket API** (local).
+- **Strategy**: Implementing a native CoAP client (libcoap) or REST client to talk to the hub. Alternatively, replace the hub with a Zigbee Stick (see below).
+
+### B. Zigbee (Generic)
+**Recommended:** Interface with **Zigbee2MQTT** or similar bridges via MQTT.
+- Instead of writing a custom Zigbee stack, run **Zigbee2MQTT** which bridges Zigbee devices to an MQTT broker.
+- **HeimWatt Implementation**: Write a "Generic MQTT" plugin that subscribes to topics like `zigbee2mqtt/device_id`.
+- **Benefits**: Supports thousands of devices (IKEA, Philips Hue, Xiaomi, etc.) without vendor lock-in.
+
+### C. Shelly (Energy Monitoring & Control)
+- **Features**: Highly popular for energy monitoring (Shelly EM, Plug S).
+- **API**: Best-in-class local API.
+  - **Gen 1**: Simple REST API (`http://device-ip/status`).
+  - **Gen 2/3**: RPC over HTTP, WebSocket, or MQTT.
+- **Strategy**: Polling the local HTTP endpoint is simplest for a plugin. MQTT is better for real-time events.
+
+### D. Matter / Thread
+- The emerging standard.
+- **Strategy**: Currently complex to implement a full Matter controller from scratch. recommended to bridge via Home Assistant or Apple/Google hubs until libraries mature.
+
+### E. Modbus TCP & Inverters
+- Already mentioned in Storage/Solar, but critical for "heavy" local appliances (Heat pumps, EV Chargers).
