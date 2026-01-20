@@ -210,18 +210,40 @@ void plugin_mgr_foreach(plugin_mgr *mgr, plugin_iter_fn fn, void *userdata);
 
 /**
  * Get list of semantic types provided by this plugin.
- * @param h Plugin handle
- * @return NULL-terminated array of semantic type names
+ *
+ * Writes semantic type ID strings to caller-owned buffer.
+ * Sets out_count to number of types written.
+ *
+ * @param h         Plugin handle
+ * @param out       Caller-owned array of const char* (output)
+ * @param max_count Maximum number of entries to write
+ * @param out_count Actual number written (output, may be NULL)
+ * @return 0 on success, -1 on error
+ *
+ * @note The strings pointed to by out[i] are owned by the plugin_handle
+ *       and remain valid until plugin_mgr_destroy is called.
  */
-const char **plugin_get_provided_types(const plugin_handle *h);
+int plugin_get_provided_types(const plugin_handle *h, const char **out, int max_count,
+                              int *out_count);
 
 /**
  * Find all providers for a given semantic type.
- * @param mgr Plugin manager
- * @param semantic_type Semantic type ID
- * @return NULL-terminated array of plugin IDs
+ *
+ * Writes plugin ID strings to caller-owned buffer.
+ * Sets out_count to number of providers found.
+ *
+ * @param mgr           Plugin manager
+ * @param semantic_type Semantic type ID (e.g., "atmosphere.temperature")
+ * @param out           Caller-owned array of const char* (output)
+ * @param max_count     Maximum number of entries to write
+ * @param out_count     Actual number written (output, may be NULL)
+ * @return 0 on success, -1 on error
+ *
+ * @note The strings pointed to by out[i] are owned by the plugin_handle
+ *       and remain valid until plugin_mgr_destroy is called.
  */
-const char **find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type);
+int find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type, const char **out,
+                            int max_count, int *out_count);
 
 /**
  * Validate dependencies for all plugins.

@@ -271,16 +271,15 @@ int sdk_run(plugin_ctx *ctx)
         // 4. Handle IO
         if (fds[0].revents & POLLIN)
         {
-            // IPC Message
+            // IPC Message - use buffered receive for proper framing
             char buf[SDK_IPC_BUFFER_SIZE];
-            ssize_t n = read(ctx->ipc_fd, buf, sizeof(buf) - 1);
-            if (n <= 0)
+            int recv_ret = sdk_ipc_recv(ctx, buf, sizeof(buf));
+            if (recv_ret < 0)
             {
-                // Core disconnected
+                // Core disconnected or error
                 ctx->running = false;
                 break;
             }
-            buf[n] = 0;
             // Handle message
             cJSON *json = cJSON_Parse(buf);
             if (json)

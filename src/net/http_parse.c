@@ -132,27 +132,53 @@ int http_serialize_response(const http_response *resp, char **out, size_t *out_l
     if (!resp || !out) return -1;
 
     // Buffer
-    char *buf = malloc(16384);  // 16KB fixed for MVP
+    enum
+    {
+        BUF_SIZE = 16384
+    };
+    char *buf = malloc(BUF_SIZE);  // 16KB fixed for MVP
     if (!buf) return -1;
 
     size_t off = 0;
-    int n = sprintf(buf + off, "HTTP/1.1 %d OK\r\n", resp->status_code);
-    off += n;
-
-    for (size_t i = 0; i < resp->header_count; i++)
+    size_t remaining = BUF_SIZE;
+    int n = snprintf(buf + off, remaining, "HTTP/1.1 %d OK\r\n", resp->status_code);
+    if (n > 0 && (size_t) n < remaining)
     {
-        n = sprintf(buf + off, "%s: %s\r\n", resp->headers[i].name, resp->headers[i].value);
-        off += n;
+        off += (size_t) n;
+        remaining -= (size_t) n;
     }
 
-    n = sprintf(buf + off, "Content-Length: %zu\r\n", resp->body_len);
-    off += n;
+    for (size_t i = 0; i < resp->header_count && remaining > 0; i++)
+    {
+        n = snprintf(buf + off, remaining, "%s: %s\r\n", resp->headers[i].name,
+                     resp->headers[i].value);
+        if (n > 0 && (size_t) n < remaining)
+        {
+            off += (size_t) n;
+            remaining -= (size_t) n;
+        }
+    }
 
-    n = sprintf(buf + off, "Connection: close\r\n");
-    off += n;
+    n = snprintf(buf + off, remaining, "Content-Length: %zu\r\n", resp->body_len);
+    if (n > 0 && (size_t) n < remaining)
+    {
+        off += (size_t) n;
+        remaining -= (size_t) n;
+    }
 
-    n = sprintf(buf + off, "\r\n");
-    off += n;
+    n = snprintf(buf + off, remaining, "Connection: close\r\n");
+    if (n > 0 && (size_t) n < remaining)
+    {
+        off += (size_t) n;
+        remaining -= (size_t) n;
+    }
+
+    n = snprintf(buf + off, remaining, "\r\n");
+    if (n > 0 && (size_t) n < remaining)
+    {
+        off += (size_t) n;
+        remaining -= (size_t) n;
+    }
 
     if (resp->body && resp->body_len > 0)
     {

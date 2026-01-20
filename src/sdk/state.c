@@ -49,7 +49,8 @@ int sdk_state_load(plugin_ctx *ctx, const char *key, char **value_out)
         {
             size_t len = end - p;
             *value_out = malloc(len + 1);
-            strncpy(*value_out, p, len);
+            if (!*value_out) return -1;
+            memcpy(*value_out, p, len);
             (*value_out)[len] = 0;
             return 0;
         }

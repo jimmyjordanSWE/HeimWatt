@@ -108,9 +108,14 @@ int db_open(db_handle **db_out, const char *path)
                     token = strsep(&ptr, ",");
                     if (token && *token != '\0')
                     {
-                        db->values[i] = atof(token);
-                        db->has_value[i] = true;
-                        db->last_ts[i] = (int64_t) row_ts;
+                        char *endptr = NULL;
+                        double val = strtod(token, &endptr);
+                        if (endptr != token)  // Valid conversion
+                        {
+                            db->values[i] = val;
+                            db->has_value[i] = true;
+                            db->last_ts[i] = (int64_t) row_ts;
+                        }
                     }
                 }
             }

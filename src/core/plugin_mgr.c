@@ -601,27 +601,34 @@ int plugin_mgr_check_health(plugin_mgr *mgr)
 
 /**
  * Get list of semantic types provided by this plugin.
- * Returns NULL-terminated array of string pointers.
+ * Returns count of types written to caller-owned buffer.
  */
-const char **plugin_get_provided_types(const plugin_handle *h)
+int plugin_get_provided_types(const plugin_handle *h, const char **out, int max_count,
+                              int *out_count)
 {
-    static const char *types[65];
+    int count = 0;
+
+    if (!out || max_count <= 0)
+    {
+        if (out_count) *out_count = 0;
+        return -1;
+    }
 
     if (!h || !h->provides_json)
     {
-        types[0] = NULL;
-        return types;
+        if (out_count) *out_count = 0;
+        return 0;
     }
 
     cJSON *known = cJSON_GetObjectItem(h->provides_json, "known");
     if (!known || !cJSON_IsArray(known))
     {
-        types[0] = NULL;
-        return types;
+        if (out_count) *out_count = 0;
+        return 0;
     }
 
-    int count = cJSON_GetArraySize(known);
-    for (int i = 0; i < count && i < 64; i++)
+    int arr_size = cJSON_GetArraySize(known);
+    for (int i = 0; i < arr_size && count < max_count; i++)
     {
         cJSON *item = cJSON_GetArrayItem(known, i);
         if (cJSON_IsString(item))
@@ -634,52 +641,62 @@ const char **plugin_get_provided_types(const plugin_handle *h)
                 const semantic_meta *meta = semantic_get_meta(sem_type);
                 if (meta)
                 {
-                    types[i] = meta->id;
+                    out[count++] = meta->id;
                     continue;
                 }
             }
             // Fallback: use as-is if conversion fails
-            types[i] = item->valuestring;
+            out[count++] = item->valuestring;
         }
     }
-    types[count < 64 ? count : 64] = NULL;
 
-    return types;
+    if (out_count) *out_count = count;
+    return 0;
 }
 
 /**
  * Find all providers for a given semantic type.
- * Returns NULL-terminated array of plugin IDs sorted by priority.
+ * Writes provider IDs to caller-owned buffer.
  */
-const char **find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type)
+int find_providers_for_type(const plugin_mgr *mgr, const char *semantic_type, const char **out,
+                            int max_count, int *out_count)
 {
-    static const char *providers[33];
+    int count = 0;
+
+    if (!out || max_count <= 0)
+    {
+        if (out_count) *out_count = 0;
+        return -1;
+    }
 
     if (!mgr || !semantic_type)
     {
-        providers[0] = NULL;
-        return providers;
+        if (out_count) *out_count = 0;
+        return 0;
     }
 
-    int count = 0;
-    for (int i = 0; i < mgr->count && count < 32; i++)
+    for (int i = 0; i < mgr->count && count < max_count; i++)
     {
         const plugin_handle *h = &mgr->plugins[i];
-        const char **types = plugin_get_provided_types(h);
 
-        for (int j = 0; types[j] != NULL; j++)
+        // Use local buffer for provided types
+        const char *types[64];
+        int type_count = 0;
+        plugin_get_provided_types(h, types, 64, &type_count);
+
+        for (int j = 0; j < type_count; j++)
         {
             if (strcmp(types[j], semantic_type) == 0)
             {
-                providers[count++] = h->id;
+                out[count++] = h->id;
                 break;
             }
         }
     }
-    providers[count] = NULL;
 
+    if (out_count) *out_count = count;
     // TODO: Sort by priority (for now, discovery order = priority)
-    return providers;
+    return 0;
 }
 /* ============================================================
  * ALIGNED SCHEDULING
@@ -746,11 +763,14 @@ int plugin_mgr_validate_dependencies(const plugin_mgr *mgr, const char *report_p
     log_info("[DEP] --- Available Data Providers ---");
     for (int i = 0; i < mgr->count; i++)
     {
-        const char **provides = plugin_get_provided_types(&mgr->plugins[i]);
-        if (provides && provides[0])
+        const char *provides[64];
+        int provides_count = 0;
+        plugin_get_provided_types(&mgr->plugins[i], provides, 64, &provides_count);
+
+        if (provides_count > 0)
         {
             log_info("[DEP] %s provides:", mgr->plugins[i].id);
-            for (int j = 0; provides[j]; j++)
+            for (int j = 0; j < provides_count; j++)
             {
                 log_info("[DEP]   - %s", provides[j]);
             }
@@ -778,8 +798,11 @@ int plugin_mgr_validate_dependencies(const plugin_mgr *mgr, const char *report_p
                 else
                     snprintf(sem_id, sizeof(sem_id), "%s", item->valuestring);
 
-                const char **providers = find_providers_for_type(mgr, sem_id);
-                if (!providers || !providers[0])
+                const char *providers[32];
+                int provider_count = 0;
+                find_providers_for_type(mgr, sem_id, providers, 32, &provider_count);
+
+                if (provider_count == 0)
                 {
                     log_warn("[DEP] \033[31mMISSING\033[0m: %s requires %s (No provider found)",
                              h->id, sem_id);
@@ -817,8 +840,11 @@ int plugin_mgr_validate_dependencies(const plugin_mgr *mgr, const char *report_p
                 const semantic_meta *meta = semantic_get_meta((semantic_type) i);
                 if (!meta) continue;
 
-                const char **p = find_providers_for_type(mgr, meta->id);
-                if (!p || !p[0])
+                const char *provs[32];
+                int prov_count = 0;
+                find_providers_for_type(mgr, meta->id, provs, 32, &prov_count);
+
+                if (prov_count == 0)
                 {
                     fprintf(f, "MISSING: %s (%s)\n", meta->id, meta->description);
                     total_missing++;

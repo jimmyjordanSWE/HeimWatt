@@ -29,8 +29,8 @@ int sdk_get_config(plugin_ctx *ctx, const char *key, char **value)
             size_t len = end - p;
             char *raw_val = malloc(len + 1);
             if (!raw_val) return -1;
-            strncpy(raw_val, p, len);
-            raw_val[len] = 0;
+            memcpy(raw_val, p, len);
+            raw_val[len] = '\0';
 
             // Handle variable substitution
             if (ctx->in_backfill_mode && ctx->current_tick_time > 0)
@@ -88,7 +88,7 @@ int sdk_substitute_config_vars(const char *input, time_t now, char **output)
             size_t l = strlen(date_str);
             if (dst + l < dst_end)
             {
-                strcpy(dst, date_str);
+                memcpy(dst, date_str, l);
                 dst += l;
                 src += 6;
             }
@@ -103,7 +103,7 @@ int sdk_substitute_config_vars(const char *input, time_t now, char **output)
             size_t l = strlen(iso_str);
             if (dst + l < dst_end)
             {
-                strcpy(dst, iso_str);
+                memcpy(dst, iso_str, l);
                 dst += l;
                 src += 5;
             }

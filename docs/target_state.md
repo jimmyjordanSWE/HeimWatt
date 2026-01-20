@@ -2,73 +2,146 @@
 
 **Vision:** An extensible, local-first data platform for energy optimization that acts as a "Single Pane of Glass" for the entire home energy system.
 
-## Storage Architecture: The "Wide CSV"
-
-The entire system state is persisted to a single CSV file, prioritizing simplicity and portability over traditional database normality.
-
-### 1. Structure
-- **File:** `data/history.csv`
-- **Rows:** One row per time interval (e.g., 1 minute). This interval is configurable in the Core config.
-- **Columns:** One column per Canonical Unit (Semantic Type).
-    - `timestamp` (ISO8601)
-    - `atmosphere.temperature`
-    - `energy.price.spot`
-    - `home.power.total`
-    - ...and so on for every semantic type.
-
-### 2. Resampling Strategy
-Plugins report data asynchronously. The Core buffers these values.
-- **On Tick:** The Core snapshots the **latest known value** for each semantic type.
-- **Write:** This snapshot is written as a new row to the CSV.
-- **Null Handling:** If no data has been received for a type since startup, the cell is empty.
+---
 
 ## Core Philosophy
-1.  **Zero Domain Knowledge in Core:** The Core remains a pure broker.
-2.  **Simplicity First:** Analysis should be possible with Excel/Pandas directly from the CSV.
-3.  **Semantic Composition:** Plugins interact only via standardized columns in the global state.
 
-## The User Experience (Target)
+| Principle | Description |
+|-----------|-------------|
+| **Zero Domain Knowledge in Core** | Core is a pure broker — routes messages, stores data |
+| **Plugin Composition** | Plugins interact via semantic types, not direct calls |
+| **User Abstraction** | Users set comfort constraints; Solver handles power |
+| **Simplicity First** | Analysis possible with Excel/Pandas from CSV |
 
-### 1. Unified Control ("Single Pane of Glass")
-The user replaces 5+ vendor apps (Heat pump, EV charger, Solar inverter, Grid owner, Smart home hub) with HeimWatt.
-- **Dashboard:** Real-time view of all energy flows, costs, and accumulated savings.
-- **Control:** Centralized setting of comfort preferences (e.g., "Ready to drive by 07:00").
+---
 
-### 2. Intelligent Automation
-- **Price Optimization:** The system automatically shifts heavy loads (EV charging, heating) to cheapest hours.
-- **Event Resilience:**
-    - **Storm Warnings:** Automatically pre-charges batteries and pre-heats house if a storm is forecast (Smhi Warnings).
-    - **Price Spikes:** Asks user for "Profit Mode" (export to grid) vs "Survival Mode".
-- **Hardware Agnostic:** Works with any hardware that has a plugin (Official, Community, or Local).
+## Storage Architecture: The "Wide CSV"
 
-## Technical Architecture (Target)
+The entire system state is persisted to a single CSV file.
 
-### 1. The Solver (Brain)
-- **Model:** MPC (Model Predictive Control) or MILP (Mixed-Integer Linear Programming).
-- **Inputs:** 
-    - **Tier 1 Intelegence (Known):** Published spot prices (next 12-35h).
-    - **Tier 2 Intelligence (Predicted):** AI/Heuristic predictions of future prices (35h - 7 days) based on weather, wind, and trends.
-    - House Physics Model (RC Network).
-- **Outputs:** optimal power schedules published as semantic blobs (`schedule.heat_pump.power`).
+```
+data/history.csv
 
-### 2. House Physics (Self-Learning)
-- **Initial:** Uses rough defaults based on house size/age.
-- **Learning:** Continuously refines R (Resistance) and C (Capacitance) values by observing how the house reacts to heat input and weather.
-- **Result:** Accuracy improves automatically over time, allowing for more aggressive "freewheeling" (turning off heat) during price spikes without losing comfort.
+timestamp,               atmosphere.temperature, energy.price.spot, home.power.total, ...
+2026-01-20T10:00:00Z,   -5.2,                   0.45,              1250,             ...
+2026-01-20T10:01:00Z,   -5.1,                   0.45,              1180,             ...
+```
 
-### 3. Hardware Integration
-- **Smart Meter (P1):** Real-time grid import/export via SlimmeLezer+ (WiFi) or Tibber Pulse.
-- **Sub-metering:** CT Clamps (Shelly EM) for specific heavy loads.
-- **Device Control:**
-    - **Heat Pumps:** Native API wrappers (MELCloud, Nibe Uplink).
-    - **EVs:** Cloud APIs (Tesla Fleet) or Local Chargers (OCPP).
-    - **Batteries:** Standardized interface for charge/discharge control.
+### Resampling Strategy
 
-### 4. Editors
-- **Device Definition Editor:** Web UI to create JSON specs for new hardware (supported by LLM for spec lookup).
-- **Connection Editor (LiteGraph):** Drag-and-drop wiring of devices to zones.
-    - *Example:* [Heat Pump] --(heats)--> [Living Room] --(measured_by)--> [Thermometer].
+- **On Tick**: Core snapshots latest known value per semantic type
+- **Write**: Snapshot written as new row
+- **Null Handling**: Empty cell if no data received since startup
 
-## Ecosystem
-- **Plugin Store:** Official signed plugins (Trust Level: High) vs Community plugins (Trust Level: Warn).
-- **Simulation Bundle:** Full virtual house environment for developing and testing plugins without hardware.
+---
+
+## The Solver (Brain)
+
+> [!IMPORTANT]
+> **Current Implementation**: Dynamic Programming with battery state discretization  
+> **Target Implementation**: HiGHS (MILP) for multi-asset thermal optimization
+
+### Inputs
+
+| Tier | Source | Horizon | Confidence |
+|------|--------|---------|------------|
+| **Tier 1** | Published spot prices | 12-35h | 100% |
+| **Tier 2** | Weather-based prediction | 35h-7d | 50-70% |
+
+### Outputs
+
+- `schedule.heat_pump.power` (W per interval)
+- `schedule.battery.power` (+charge, -discharge)
+- `schedule.ev.power` (charging schedule)
+
+---
+
+## House Physics (Self-Learning)
+
+The RC thermal network model accuracy improves automatically:
+
+| Stage | Data | Accuracy |
+|-------|------|----------|
+| Day 1 | Minimal | Default assumptions |
+| Week 1 | Temperature patterns | Rough R estimate |
+| Week 2+ | Heating cycles | R and C estimated |
+| Month 1+ | Seasonal variation | Weather-adjusted |
+
+---
+
+## Hardware Integration
+
+### Smart Meter (P1 Port)
+
+| Device | Price | Connection | Notes |
+|--------|-------|------------|-------|
+| SlimmeLezer+ | €25 | WiFi → MQTT | Start here |
+| Tibber Pulse | €100 | Cloud API | Already integrated |
+| P1 USB Cable | €15 | Serial | Later |
+
+### CT Clamps (Sub-Metering)
+
+| Device | Price | Channels | Notes |
+|--------|-------|----------|-------|
+| Shelly EM | €35 | 2 | WiFi, good for single-phase |
+| Shelly Pro 3EM | €90 | 3 | 3-phase monitoring |
+| IotaWatt | €150 | 14 | Open source, highly accurate |
+
+---
+
+## Two Editors
+
+### Device Definition Editor
+
+- **Purpose**: Define WHAT a device IS (specs, protocol)
+- **Output**: JSON file in `~/.heimwatt/devices/`
+
+### Connection Editor (LiteGraph.js)
+
+- **Purpose**: Wire YOUR devices in YOUR house
+- **Nodes**: Zones, Devices, Sensors, Constraints
+- **Edges**: "serves", "measures", "constrains"
+
+---
+
+## Open Design Questions
+
+1. **LP vs DP**: When to use Dynamic Programming vs HiGHS MILP?
+   - DP: Simple battery scheduling (101 states × 9 actions × 168 periods)
+   - MILP: Thermal dynamics, multi-asset coupling, complex constraints
+
+2. **SDK Push Messaging**: How to enable server-initiated messages to plugins?
+
+3. **State Persistence**: SQLite vs JSON for runtime state between restarts?
+
+4. **Plugin Trust**: How to implement signed plugin verification?
+
+---
+
+## File Locations (Target)
+
+```
+/usr/share/heimwatt/
+├── plugins/              # Official signed plugins
+└── devices/              # Official device definitions
+
+~/.heimwatt/
+├── config/
+│   ├── system.json       # From connection editor
+│   └── credentials.json  # Vault for API tokens
+├── plugins/              # User/community plugins
+├── devices/              # User device definitions
+└── data/
+    └── history.csv       # Wide CSV semantic store
+```
+
+---
+
+## Related Documents
+
+- [current_state.md](current_state.md) — Where we are now
+- [roadmap.md](roadmap.md) — How we get there
+- [ARCHITECTURE_REVIEW.md](../ARCHITECTURE_REVIEW.md) — Strengths/weaknesses analysis
+- [old_docs/docs/DESIGN_SPEC.md](../old_docs/docs/DESIGN_SPEC.md) — Full specification (legacy)
+- [old_docs/docs/SDK_SPEC.md](../old_docs/docs/SDK_SPEC.md) — SDK reference
+- [old_docs/docs/Solver.md](../old_docs/docs/Solver.md) — MPC/MILP theory

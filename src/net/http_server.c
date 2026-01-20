@@ -106,7 +106,6 @@ struct http_server
 // Forward declarations
 static int set_nonblocking(int fd);
 static http_conn *conn_alloc(http_server *srv);
-static http_conn *conn_alloc(http_server *srv);
 static void conn_unref(http_server *srv, http_conn *conn);
 static void conn_ref(http_conn *conn);
 static void conn_reset(http_conn *conn);
@@ -640,8 +639,8 @@ static int handle_read(http_server *srv, http_conn *conn)
                     pthread_mutex_lock(&srv->pending_lock);
                     if (srv->pending_count < 64)
                     {
-                        strncpy(srv->pending[srv->pending_count].request_id, conn->request_id,
-                                REQUEST_ID_LEN);
+                        snprintf(srv->pending[srv->pending_count].request_id, REQUEST_ID_LEN, "%s",
+                                 conn->request_id);
                         srv->pending[srv->pending_count].conn = conn;
                         conn_ref(conn);  // Async system holds a reference
                         srv->pending_count++;

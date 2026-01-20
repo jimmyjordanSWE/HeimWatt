@@ -312,16 +312,6 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
     int ret = 0;
     if (!ctx) return -EINVAL;
 
-    // Initialize logging
-    log_set_level(LOG_INFO);
-    FILE *log_fp = fopen("heimwatt.log", "a");
-    if (log_fp)
-    {
-        log_add_fp(log_fp, LOG_TRACE);
-        ctx->log_file = log_fp;  // Store in ctx to close later
-    }
-    log_info("Server initializing...");
-
     // Init HTTP Server
     if (http_server_create(&ctx->http, 8080) < 0)
     {
@@ -721,9 +711,12 @@ static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
                 if (cJSON_IsString(type_item))
                 {
                     const char *semantic_type = type_item->valuestring;
-                    const char **providers = find_providers_for_type(ctx->plugins, semantic_type);
+                    const char *providers[32];
+                    int provider_count = 0;
+                    find_providers_for_type(ctx->plugins, semantic_type, providers, 32,
+                                            &provider_count);
 
-                    if (!providers || !providers[0])
+                    if (provider_count == 0)
                     {
                         log_warn("[IPC] No provider for %s (requested by %s)", semantic_type, from);
                     }
