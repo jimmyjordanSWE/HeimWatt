@@ -1,15 +1,16 @@
-// #define _GNU_SOURCE (Defined in Makefile)
 #include "server.h"
 
 #include <dirent.h>
 #include <errno.h>
 #include <math.h>
-#include <poll.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/signalfd.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -25,6 +26,7 @@
 #include "memory.h"
 #include "net/http_server.h"
 #include "server_internal.h"
+#include "util/thread_pool.h"
 
 // Global for signal handling if needed, but we pass ctx via args
 static volatile int g_shutdown = 0;
@@ -35,6 +37,7 @@ heimwatt_ctx *heimwatt_create(void)
     if (ctx)
     {
         pthread_mutex_init(&ctx->conn_lock, NULL);
+        ctx->pool = thread_pool_create(4);  // 4 workers
     }
     return ctx;
 }
@@ -440,9 +443,13 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
     if (!ctx) return;
     atomic_store(&ctx->running, 1);
 
-    struct pollfd fds[33];  // 1 server + 32 clients
+    enum
+    {
+        MAX_EVENTS = 64
+    };
+    struct epoll_event events[MAX_EVENTS];
 
-    log_info("[CORE] Main loop started (max %d plugins)", MAX_PLUGIN_CONNECTIONS);
+    log_info("[CORE] Main loop started (epoll-based, max 32 plugins)");
 
     // Start HTTP Thread
     if (ctx->http)
@@ -459,83 +466,91 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
 
     while (atomic_load(&ctx->running) && !g_shutdown && !(shutdown_flag && *shutdown_flag))
     {
-        // Setup poll
-        int nfds = 0;
-        fds[nfds].fd = ipc_server_fd(ctx->ipc);
-        fds[nfds].events = POLLIN;
-        nfds++;
+        int n = ipc_server_poll(ctx->ipc, events, MAX_EVENTS, 1000);
 
-        for (int i = 0; i < ctx->conn_count; i++)
+        if (n < 0)
         {
-            fds[nfds].fd = ipc_conn_fd(ctx->conns[i]);
-            fds[nfds].events = POLLIN;
-            if (ipc_conn_has_pending(ctx->conns[i]))
+            if (n == -EINTR)
             {
-                fds[nfds].events |= POLLOUT;
+                continue;
             }
-            nfds++;
-        }
-
-        if (poll(fds, nfds, 1000) < 0)
-        {
-            if (errno == EINTR) continue;
+            log_error("[CORE] epoll_wait failed: %s", strerror(-n));
             break;
         }
 
-        // CSV Backend Tick (Flush check)
-        db_tick(ctx->db);
-
-        // Check Server
-        if (fds[0].revents & POLLIN)
+        if (n > 0)
         {
-            ipc_conn *new_conn = NULL;
-            if (ipc_server_accept(ctx->ipc, &new_conn) == 0)
-            {
-                if (ctx->conn_count < MAX_PLUGIN_CONNECTIONS)
-                {
-                    pthread_mutex_lock(&ctx->conn_lock);
-                    ctx->conns[ctx->conn_count++] = new_conn;
-                    pthread_mutex_unlock(&ctx->conn_lock);
-                    log_debug("[IPC] New connection accepted (pending hello)");
-                }
-                else
-                {
-                    log_warn("[IPC] Connection rejected: max plugins reached (%d)",
-                             MAX_PLUGIN_CONNECTIONS);
-                    ipc_conn_destroy(&new_conn);
-                }
-            }
+            // Process events
         }
 
-        // Check Clients
-        for (int i = 0; i < ctx->conn_count; i++)
+        // Process events
+        for (int i = 0; i < n; i++)
         {
-            int idx = i + 1;
+            void *ptr = events[i].data.ptr;
+            uint32_t ev = events[i].events;
+
+            // 1. Check for listen socket event (new connection)
+            if (ipc_server_is_listen_event(ctx->ipc, ptr))
+            {
+                ipc_conn *new_conn = NULL;
+                if (ipc_server_accept(ctx->ipc, &new_conn) == 0)
+                {
+                    if (ctx->conn_count < MAX_PLUGIN_CONNECTIONS)
+                    {
+                        pthread_mutex_lock(&ctx->conn_lock);
+                        ctx->conns[ctx->conn_count++] = new_conn;
+                        pthread_mutex_unlock(&ctx->conn_lock);
+                        log_debug("[IPC] New connection accepted (pending hello)");
+                    }
+                    else
+                    {
+                        log_warn("[IPC] Connection rejected: max plugins reached (%d)",
+                                 MAX_PLUGIN_CONNECTIONS);
+                        ipc_server_unregister_conn(ctx->ipc, new_conn);
+                        ipc_conn_destroy(&new_conn);
+                    }
+                }
+                continue;
+            }
+
+            // 2. Handle client connection event
+            ipc_conn *conn = (ipc_conn *) ptr;
             int disconnect = 0;
 
-            // Handle OUTPUT
-            if (fds[idx].revents & POLLOUT)
+            // Handle errors
+            if (ev & (EPOLLERR | EPOLLHUP))
             {
-                if (ipc_conn_flush(ctx->conns[i]) < 0)
+                disconnect = 1;
+            }
+
+            // Handle OUTPUT
+            if (!disconnect && (ev & EPOLLOUT))
+            {
+                if (ipc_conn_flush(conn) < 0)
                 {
                     disconnect = 1;
+                }
+                else if (!ipc_conn_has_pending(conn))
+                {
+                    // No more pending data, switch back to read-only
+                    ipc_server_update_conn_events(ctx->ipc, conn, EPOLLIN);
                 }
             }
 
             // Handle INPUT (if still connected)
-            if (!disconnect && (fds[idx].revents & POLLIN))
+            if (!disconnect && (ev & EPOLLIN))
             {
                 char *msg = NULL;
                 size_t len = 0;
-                int ret = ipc_conn_recv(ctx->conns[i], &msg, &len);
-                if (ret < 0)
+                int res = ipc_conn_recv(conn, &msg, &len);
+                if (res < 0)
                 {
                     disconnect = 1;
                 }
-                else
+                else if (res > 0 && msg)
                 {
-                    // Handle potential multiple JSON objects in one buffer
-                    const char *p = msg;
+                    // Process message(s) - may contain multiple lines
+                    char *p = msg;
                     const char *end = NULL;
                     while ((size_t) (p - msg) < len && *p)
                     {
@@ -546,8 +561,10 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                         cJSON *json = cJSON_ParseWithOpts(p, &end, 0);
                         if (json)
                         {
-                            handle_ipc_command(ctx, ctx->conns[i], json);
-                            cJSON_Delete(json);
+                            if (handle_ipc_command(ctx, conn, json) == 0)
+                            {
+                                cJSON_Delete(json);
+                            }
                         }
                         else
                         {
@@ -556,40 +573,64 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                         p = end;
                     }
                     free(msg);
+
+                    // Check if we need to register for write events
+                    if (ipc_conn_has_pending(conn))
+                    {
+                        ipc_server_update_conn_events(ctx->ipc, conn, EPOLLIN | EPOLLOUT);
+                    }
                 }
             }
 
             if (disconnect)
             {
-                // Disconnect
-                const char *pid = ipc_conn_plugin_id(ctx->conns[i]);
-                log_info("[PLUGIN] Disconnected: '%s'", pid ? pid : "unknown");
-
+                // Find connection index
+                int conn_idx = -1;
                 pthread_mutex_lock(&ctx->conn_lock);
-                // Clean up registered endpoints for this plugin
-                if (pid)
+                for (int j = 0; j < ctx->conn_count; j++)
                 {
-                    for (int j = 0; j < ctx->registry_count; j++)
+                    if (ctx->conns[j] == conn)
                     {
-                        if (strcmp(ctx->registry[j].plugin_id, pid) == 0)
-                        {
-                            ctx->registry[j] = ctx->registry[--ctx->registry_count];
-                            j--;  // Recheck swapped entry
-                        }
+                        conn_idx = j;
+                        break;
                     }
                 }
-                ipc_conn_destroy(&ctx->conns[i]);
-                // Shift
-                ctx->conns[i] = ctx->conns[ctx->conn_count - 1];
-                ctx->conn_count--;
-                pthread_mutex_unlock(&ctx->conn_lock);
 
-                // Do not i--. The moved conn will be checked next iteration.
+                if (conn_idx >= 0)
+                {
+                    const char *pid = ipc_conn_plugin_id(conn);
+                    log_info("[PLUGIN] Disconnected: '%s'", pid ? pid : "unknown");
+
+                    // Clean up registered endpoints for this plugin
+                    if (pid)
+                    {
+                        for (int k = 0; k < ctx->registry_count; k++)
+                        {
+                            if (strcmp(ctx->registry[k].plugin_id, pid) == 0)
+                            {
+                                ctx->registry[k] = ctx->registry[--ctx->registry_count];
+                                k--;  // Re-check swapped element
+                            }
+                        }
+                    }
+
+                    // Unregister from epoll before destroying
+                    ipc_server_unregister_conn(ctx->ipc, conn);
+                    ipc_conn_destroy(&conn);
+
+                    // Shift
+                    ctx->conns[conn_idx] = ctx->conns[ctx->conn_count - 1];
+                    ctx->conn_count--;
+                }
+                pthread_mutex_unlock(&ctx->conn_lock);
             }
         }
 
-        // Check plugin health, restart any that crashed
+        // Fallback: Also check periodically to handle lost signals or race conditions
         (void) plugin_mgr_check_health(ctx->plugins);
+
+        // CSV Backend Tick (Flush check) at the end of the tick
+        db_tick(ctx->db);
     }
 
     // Stop HTTP Thread
@@ -606,8 +647,12 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
     {
         log_info("[CORE] Shutdown requested via signal");
     }
+    else if (g_shutdown)
+    {
+        log_info("[CORE] Shutdown requested via global flag");
+    }
 
-    log_info("[CORE] Main loop exiting...");
+    atomic_store(&ctx->running, 0);
 }
 
 void heimwatt_destroy(heimwatt_ctx **ctx_ptr)
@@ -624,6 +669,7 @@ void heimwatt_destroy(heimwatt_ctx **ctx_ptr)
     db_close(&ctx->db);
     ipc_server_destroy(&ctx->ipc);
     http_server_destroy(&ctx->http);
+    thread_pool_destroy(&ctx->pool);
 
     for (int i = 0; i < ctx->conn_count; i++)
     {

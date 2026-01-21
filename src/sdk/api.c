@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "sdk_internal.h"
+#include "util/mem.h"
 
 // Stubs for Calculator Plugins (OUT)
 // In a real implementation, these would handle IPC for endpoint registration

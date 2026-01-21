@@ -7,7 +7,6 @@
 #include "log.h"
 #include "server.h"
 
-// Async-signal-safe shutdown flag
 static volatile sig_atomic_t g_shutdown_requested = 0;
 
 static void signal_handler(int sig)
@@ -44,8 +43,21 @@ int main(int argc, char **argv)
     log_info("[MAIN] Storage path: %s", data_path);
 
     // Setup signal handlers
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sa.sa_flags = 0;  // DISABLE SA_RESTART
+    sigemptyset(&sa.sa_mask);
+
+    if (sigaction(SIGINT, &sa, NULL) == -1)
+    {
+        perror("sigaction SIGINT");
+    }
+    if (sigaction(SIGTERM, &sa, NULL) == -1)
+    {
+        perror("sigaction SIGTERM");
+    }
+
     signal(SIGPIPE, SIG_IGN);
 
     // Initialize Core
@@ -63,7 +75,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Run (Blocking) - pass shutdown flag for signal-safe shutdown
+    // Run (Blocking)
     heimwatt_run_with_shutdown_flag(ctx, &g_shutdown_requested);
 
     log_info("[MAIN] Exit");

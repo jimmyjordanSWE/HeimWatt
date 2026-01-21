@@ -33,6 +33,7 @@ SRC = src/main.c src/server.c src/core/ipc.c src/core/ipc_handlers.c src/core/se
       src/core/plugin_mgr.c src/core/config.c src/core/memory.c src/core/log_ring.c src/core/log_structured.c \
       src/db/db.c src/db/csv_backend.c \
       src/db/duckdb_backend.c \
+      src/util/thread_pool.c \
       src/net/tcp_server.c src/net/http_parse.c src/net/http_server.c
 # Convert src/%.c to build/obj/src/%.o
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
@@ -126,7 +127,9 @@ UNIT_TESTS = tests/unit/test_http_parse.c \
              tests/unit/test_http_server.c \
              tests/unit/test_duckdb_backend.c \
              tests/unit/test_lps.c \
-             tests/unit/test_log_ring.c
+             tests/unit/test_log_ring.c \
+             tests/unit/test_thread_pool.c \
+             tests/unit/test_sdk_eventloop.c
 
 TEST_RUNNER_SRC = tests/test_runner.c
 
@@ -145,7 +148,9 @@ TEST_DEPS_OBJ = $(OBJ_DIR)/src/net/http_parse.o \
                 $(OBJ_DIR)/src/net/tcp_server.o \
                 $(OBJ_DIR)/src/core/log_ring.o \
                 $(OBJ_DIR)/src/core/log_structured.o \
-                $(OBJ_DIR)/plugins/out/energy_strategy/lps/lps.o
+                $(OBJ_DIR)/src/util/thread_pool.o \
+                $(OBJ_DIR)/plugins/out/energy_strategy/lps/lps.o \
+                $(OBJ_DIR)/src/sdk/eventloop.o
 
 # Build and run unit tests
 unit-test: CFLAGS = $(CFLAGS_DEBUG)
@@ -186,7 +191,7 @@ $(TARGET_BIN): $(OBJ) $(LIBS_OBJ) | $(BIN_DIR)
 
 # --- SDK Build ---
 
-SDK_SRC = src/sdk/lifecycle.c src/sdk/scheduler.c src/sdk/ipc.c \
+SDK_SRC = src/sdk/lifecycle.c src/sdk/eventloop.c src/sdk/scheduler.c src/sdk/ipc.c \
           src/sdk/report.c src/sdk/config.c src/sdk/http.c \
           src/sdk/json.c src/sdk/state.c src/sdk/query.c \
           src/sdk/api.c src/core/semantic_types.c \

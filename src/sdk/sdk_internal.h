@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <time.h>
 
+#include "sdk_eventloop.h"
+
 // Internal constants
 #define SDK_IPC_BUFFER_SIZE 4096
 #define SDK_MAX_TICKERS 32
@@ -78,6 +80,7 @@ struct plugin_ctx
 
     // State
     bool running;
+    sdk_eventloop *loop;
 
     // History / Backfill
     int64_t history_start_ts;

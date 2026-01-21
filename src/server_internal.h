@@ -10,6 +10,7 @@
 #include "db.h"
 #include "net/http_server.h"
 #include "server.h"
+#include "util/thread_pool.h"
 
 enum
 {
@@ -34,6 +35,9 @@ struct heimwatt_ctx
     // HTTP Server
     http_server *http;
     pthread_t http_thread;
+
+    // Thread Pool
+    thread_pool *pool;
 
     // Endpoint Registry
     struct

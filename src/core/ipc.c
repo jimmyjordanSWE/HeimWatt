@@ -3,9 +3,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -15,6 +17,7 @@
 struct ipc_server
 {
     int fd;
+    int epoll_fd;
     char *socket_path;
 };
 
@@ -44,21 +47,23 @@ int ipc_server_init(ipc_server **srv_out, const char *socket_path)
 
     ipc_server *srv = mem_alloc(sizeof(*srv));
     if (!srv) return -ENOMEM;
+    srv->fd = -1;
+    srv->epoll_fd = -1;
 
     size_t path_len = strlen(socket_path);
     srv->socket_path = mem_alloc(path_len + 1);
     if (!srv->socket_path)
     {
-        strcpy(srv->socket_path, socket_path);
+        ret = -ENOMEM;
+        goto cleanup;
     }
-    else
+    memcpy(srv->socket_path, socket_path, path_len + 1);
 
-        srv->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    srv->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (srv->fd < 0)
     {
-        mem_free(srv->socket_path);
-        mem_free(srv);
-        return -errno;
+        ret = -errno;
+        goto cleanup;
     }
 
     struct sockaddr_un addr;
@@ -79,6 +84,22 @@ int ipc_server_init(ipc_server **srv_out, const char *socket_path)
         goto cleanup;
     }
 
+    // Create epoll instance
+    srv->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    if (srv->epoll_fd < 0)
+    {
+        ret = -errno;
+        goto cleanup;
+    }
+
+    // Add listen socket to epoll
+    struct epoll_event ev = {.events = EPOLLIN, .data.ptr = srv};
+    if (epoll_ctl(srv->epoll_fd, EPOLL_CTL_ADD, srv->fd, &ev) < 0)
+    {
+        ret = -errno;
+        goto cleanup;
+    }
+
     *srv_out = srv;
     return 0;
 
@@ -92,6 +113,7 @@ void ipc_server_destroy(ipc_server **srv_ptr)
     if (!srv_ptr || !*srv_ptr) return;
     ipc_server *srv = *srv_ptr;
 
+    if (srv->epoll_fd >= 0) close(srv->epoll_fd);
     if (srv->fd >= 0) close(srv->fd);
     if (srv->socket_path)
     {
@@ -120,6 +142,16 @@ int ipc_server_accept(ipc_server *srv, ipc_conn **conn_out)
 
     // Set non-blocking
     set_nonblocking(conn->fd);
+
+    // Register with epoll (level-triggered for simplicity)
+    struct epoll_event ev = {.events = EPOLLIN, .data.ptr = conn};
+    if (epoll_ctl(srv->epoll_fd, EPOLL_CTL_ADD, conn->fd, &ev) < 0)
+    {
+        int saved_errno = errno;
+        close(new_fd);
+        mem_free(conn);
+        return -saved_errno;
+    }
 
     *conn_out = conn;
     return 0;
@@ -259,3 +291,32 @@ const char *ipc_conn_plugin_id(const ipc_conn *conn) { return conn ? conn->plugi
 
 int ipc_server_fd(const ipc_server *srv) { return srv ? srv->fd : -1; }
 int ipc_conn_fd(const ipc_conn *conn) { return conn ? conn->fd : -1; }
+
+int ipc_server_get_epoll_fd(const ipc_server *srv) { return srv ? srv->epoll_fd : -1; }
+
+int ipc_server_poll(ipc_server *srv, struct epoll_event *events, int max_events, int timeout_ms)
+{
+    if (!srv || !events || srv->epoll_fd < 0) return -EINVAL;
+    int ret = epoll_wait(srv->epoll_fd, events, max_events, timeout_ms);
+    return ret < 0 ? -errno : ret;
+}
+
+int ipc_server_unregister_conn(ipc_server *srv, ipc_conn *conn)
+{
+    if (!srv || !conn || srv->epoll_fd < 0 || conn->fd < 0) return -EINVAL;
+    // EPOLL_CTL_DEL ignores ev parameter in Linux 2.6.9+, but pass NULL for clarity
+    (void) epoll_ctl(srv->epoll_fd, EPOLL_CTL_DEL, conn->fd, NULL);
+    return 0;
+}
+
+int ipc_server_update_conn_events(ipc_server *srv, ipc_conn *conn, uint32_t events)
+{
+    if (!srv || !conn || srv->epoll_fd < 0 || conn->fd < 0) return -EINVAL;
+    struct epoll_event ev = {.events = events, .data.ptr = conn};
+    return epoll_ctl(srv->epoll_fd, EPOLL_CTL_MOD, conn->fd, &ev) < 0 ? -errno : 0;
+}
+
+bool ipc_server_is_listen_event(const ipc_server *srv, void *event_ptr)
+{
+    return srv && event_ptr == srv;
+}

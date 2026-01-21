@@ -14,6 +14,8 @@
 #include "db.h"
 #include "log.h"
 #include "net/http_server.h"
+#include "util/mem.h"
+#include "util/thread_pool.h"
 
 /* ============================================================================
  * Helper Prototypes
@@ -25,10 +27,11 @@
  * Command Handlers
  * ============================================================================ */
 
-static void cmd_report_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
+/* ============================================================================ */
+
+static void cmd_report_logic(heimwatt_ctx *ctx, cJSON *json, const char *plugin_id)
 {
-    const char *from = ipc_conn_plugin_id(conn);
-    if (!from) from = "unknown";
+    const char *from = plugin_id ? plugin_id : "unknown";
 
     // {"cmd":"report", "type":"...", "val":123, "ts": ...}
     cJSON *type = cJSON_GetObjectItem(json, "type");
@@ -66,6 +69,28 @@ static void cmd_report_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
         log_info("[DATA] Stored: %s = %.2f @ %s (from: %s)", type->valuestring, val->valuedouble,
                  time_buf, from);
     }
+}
+
+typedef struct
+{
+    heimwatt_ctx *ctx;
+    cJSON *json;
+    char plugin_id[64];
+} report_task_args;
+
+static void cmd_report_task(void *arg)
+{
+    report_task_args *args = (report_task_args *) arg;
+    cmd_report_logic(args->ctx, args->json, args->plugin_id);
+    cJSON_Delete(args->json);  // Ownership was transferred
+    mem_free(args);
+}
+
+static void cmd_report_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
+{
+    (void) conn;
+    const char *from = ipc_conn_plugin_id(conn);
+    cmd_report_logic(ctx, json, from);
 }
 
 static void cmd_config_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
@@ -382,6 +407,7 @@ static void cmd_hello_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
 {
     (void) ctx;
     // {"cmd":"hello", "id":"..."}
+    cJSON *id = cJSON_GetObjectItem(json, "id");
     if (id && id->valuestring)
     {
         ipc_conn_set_plugin_id(conn, id->valuestring);
@@ -473,23 +499,56 @@ static const struct
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-void handle_ipc_command(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
+int handle_ipc_command(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
 {
+    if (!ctx || !conn || !json) return 0;
+
     cJSON *cmd = cJSON_GetObjectItem(json, "cmd");
-    if (!cmd || !cJSON_IsString(cmd)) return;
+    if (!cmd || !cmd->valuestring) return 0;
 
     const char *from = ipc_conn_plugin_id(conn);
     if (!from) from = "unknown";
 
     log_debug("[IPC] Received cmd='%s' from='%s'", cmd->valuestring, from);
 
+    // Optimization: Offload 'report' to thread pool
+    if (ctx->pool && strcmp(cmd->valuestring, "report") == 0)
+    {
+        report_task_args *args = mem_alloc(sizeof(report_task_args));
+        if (args)
+        {
+            args->ctx = ctx;
+            // Assuming json is OWNED by the caller (server.c) and we take it.
+            // But cJSON struct structure is tricky to deep copy efficiently if we don't own it.
+            // server.c loop: calls this, then cJSON_Delete.
+            // Ideally we need to tell server.c "I took it".
+            // So we use standard pointer provided.
+            args->json = json;
+
+            if (from)
+                snprintf(args->plugin_id, sizeof(args->plugin_id), "%s", from);
+            else
+                args->plugin_id[0] = '\0';
+
+            if (thread_pool_submit(ctx->pool, cmd_report_task, args) == 0)
+            {
+                return 1;  // Adopted, caller should not delete json
+            }
+            mem_free(args);  // Submission failed, free args
+        }
+        // Fallback to sync handling if thread pool is not available or submission failed
+    }
+
+    // Handle all commands synchronously (including 'report' if not offloaded)
     for (size_t i = 0; i < ARRAY_LEN(ipc_handlers); i++)
     {
         if (strcmp(cmd->valuestring, ipc_handlers[i].name) == 0)
         {
             ipc_handlers[i].fn(ctx, conn, json);
-            return;
+            return 0;  // Handled synchronously, caller should delete json
         }
     }
-    log_warn("[IPC] Unknown command: '%s'", cmd->valuestring);
+
+    log_warn("[IPC] Unknown command from %s: %s", from, cmd->valuestring);
+    return 0;  // Not adopted, caller should delete json
 }

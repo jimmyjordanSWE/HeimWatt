@@ -10,6 +10,7 @@
 #include "db.h"
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,6 +27,7 @@ struct db_handle
 {
     db_backend *backends;
     size_t count;
+    pthread_mutex_t lock;
 };
 
 /* ============================================================================
@@ -149,6 +151,13 @@ int db_open(db_handle **db_out, const struct config *cfg)
         db->backends[0].is_primary = true;
     }
 
+    if (pthread_mutex_init(&db->lock, NULL) != 0)
+    {
+        mem_free(db->backends);
+        mem_free(db);
+        return -ENOMEM;
+    }
+
     *db_out = db;
     return 0;
 }
@@ -166,6 +175,7 @@ void db_close(db_handle **db_ptr)
         }
     }
     mem_free(db->backends);
+    pthread_mutex_destroy(&db->lock);
     mem_free(db);
     *db_ptr = NULL;
 }
@@ -202,16 +212,22 @@ int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double
 int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, int64_t *out_ts)
 {
     if (!db || db->count == 0) return -EINVAL;
-    /* Always use primary backend for reads */
-    return db->backends[0].ops->query_latest_tier1(db->backends[0].ctx, type, out_val, out_ts);
+    /* Always use primary backend for reads - reads are thread safe typically */
+    pthread_mutex_lock(&db->lock);
+    int ret = db->backends[0].ops->query_latest_tier1(db->backends[0].ctx, type, out_val, out_ts);
+    pthread_mutex_unlock(&db->lock);
+    return ret;
 }
 
 int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int64_t to_ts,
                          double **out_values, int64_t **out_ts, size_t *out_count)
 {
     if (!db || db->count == 0) return -EINVAL;
-    return db->backends[0].ops->query_range_tier1(db->backends[0].ctx, type, from_ts, to_ts,
-                                                  out_values, out_ts, out_count);
+    pthread_mutex_lock(&db->lock);
+    int ret = db->backends[0].ops->query_range_tier1(db->backends[0].ctx, type, from_ts, to_ts,
+                                                     out_values, out_ts, out_count);
+    pthread_mutex_unlock(&db->lock);
+    return ret;
 }
 
 int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t timestamp)
@@ -251,7 +267,10 @@ int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const cha
 int db_query_latest_tier2(db_handle *db, const char *key, char **out_json, int64_t *out_ts)
 {
     if (!db || db->count == 0) return -EINVAL;
-    return db->backends[0].ops->query_latest_tier2(db->backends[0].ctx, key, out_json, out_ts);
+    pthread_mutex_lock(&db->lock);
+    int ret = db->backends[0].ops->query_latest_tier2(db->backends[0].ctx, key, out_json, out_ts);
+    pthread_mutex_unlock(&db->lock);
+    return ret;
 }
 
 /* ============================================================================
@@ -262,6 +281,7 @@ int db_tick(db_handle *db)
 {
     if (!db) return -EINVAL;
 
+    pthread_mutex_lock(&db->lock);
     /* Tick all backends */
     for (size_t i = 0; i < db->count; i++)
     {

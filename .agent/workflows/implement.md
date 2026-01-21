@@ -28,6 +28,10 @@ When implementing:
 # Task
 
 ## Phase 0: Context Loading (Required)
+0. **Log Start Time**: Immediately prepend a new entry to `CHANGELOG.md` with:
+   - Current timestamp (Start Time).
+   - A placeholder description (e.g., "Started implementation of...").
+   - Status marked as `[WIP]`.
 
 // turbo
 1. Run `make analyze` to generate structure analysis files in `scripts/out/`.
@@ -38,6 +42,7 @@ When implementing:
    - `scripts/out/structure.txt` - API surface and module structure
    - `scripts/out/call_chains.txt` - Function call relationships
    - `README.md` - Project overview
+   - `CHANGELOG.md` - Project history, 
    - `Manual/` - User-facing documentation
 
 3. Read the implementation plan file provided by the user.
@@ -80,18 +85,16 @@ When implementing:
 
 ## Phase 4: Completion
 
-12. **Update CHANGELOG.md**:
-    - First, read the existing `CHANGELOG.md` to understand the format and recent entries
-    - **Prepend** a new entry under today's date (ensure reverse chronological order / newest first) with:
-      - Time in HH:MM format
-      - Brief description of what was implemented
-      - Reference to the implementation plan if applicable
+12. **Finalize CHANGELOG.md**:
+    - Update the existing `[WIP]` entry created in Step 0.
+    - Add the **End Time** to create a range (e.g., `10:00 - 11:30`).
+    - Replace the placeholder description with the final summary of what was implemented.
     - Format example:
       ```
       ## 2026-01-21
       
       ### Features
-      - **09:30**: Implemented IPC command dispatch table (per `impl_plan_2_ipc_dispatch.md`)
+      - **09:30 - 10:15**: Implemented IPC command dispatch table (per `impl_plan_2_ipc_dispatch.md`)
       ```
 
 13. **Manual Page (for large features)**:

@@ -12,6 +12,6 @@
  * @param conn IPC connection source
  * @param json Validated JSON object containing the command
  */
-void handle_ipc_command(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json);
+int handle_ipc_command(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json);
 
 #endif /* HEIMWATT_IPC_HANDLERS_H */

@@ -6,8 +6,44 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-01-21
 
+- **12:12**: Finalized Graceful Shutdown:
+  - **Refactoring**: Reverted experimental SignalFD logic to a simpler, dedicated `sigaction` flow for improved reliability in multi-threaded contexts.
+  - **Verification**: Confirmed clean exit (Status 0) and proper cleanup logic across core, HTTP, and database layers.
+- **11:51**: Fixed Graceful Shutdown and Signal Handling:
+  - **Signal Handling**: Replaced `signal()` with `sigaction()` and disabled `SA_RESTART` flag in `src/main.c`. This ensures blocking calls like `epoll_wait` are correctly interrupted by signals.
+  - **IPC API**: Updated `ipc_server_poll()` to return `-errno` on failure, allowing the main loop to detect `EINTR`.
+  - **Graceful Shutdown**: Confirmed graceful termination of the main loop and HTTP server thread on `SIGINT` (Ctrl+C).
+- **11:38**: Resolved Runtime Initialization Errors:
+  - **Database**: Fixed DuckDB version incompatibility by removing stale `data/heimwatt.duckdb` and allowing the server to recreate a fresh database.
+  - **Network**: Resolved `Bind failed: Address already in use` error for the HTTP server on port 8080.
+
+### Documentation
+- **11:28**: Completed [Manual/security.md](Manual/security.md) as full implementation spec (marked NOT IMPLEMENTED). Covers authentication, credential storage, OAuth flow, remote access options, plugin signatures, device safety constraints, and audit trail.
+
 ### Features
-- **10:55**: Implemented SDK Plugin Taxonomy ([impl_plan_taxonomy.md](impl_plan_taxonomy.md)):
+- **11:07 - 11:16**: IPC Epoll Unification:
+  - **IPC**: Added epoll FD to `ipc_server` struct with full lifecycle management.
+  - **IPC API**: New functions `ipc_server_poll()`, `ipc_server_get_epoll_fd()`, `ipc_server_unregister_conn()`, `ipc_server_update_conn_events()`, `ipc_server_is_listen_event()`.
+  - **Server**: Refactored `heimwatt_run_with_shutdown_flag()` from poll() to epoll_wait() via unified `ipc_server_poll()`.
+  - **Architecture**: HTTP and IPC now both use epoll, creating consistent event-driven patterns.
+- **10:55 - 11:06**: SDK Event Loop Refactoring:
+  - **SDK**: Refactored `sdk_run` to use a dedicated `sdk_eventloop` module in `src/sdk/eventloop.c`.
+  - **SDK**: Added `sdk_eventloop` API (create, add_fd, add_ticker) to `include/sdk_eventloop.h`.
+  - **SDK**: Extracted specific logic (ipc, backfill) from `lifecycle.c` to improve modularity.
+  - **Testing**: Added unit tests for new event loop module.
+  
+- **10:49 - 10:55**: Verified Logging Enhancements & Fixed IPC Build Regression:
+  - Verified logging implementation (Ring Buffer, /api/logs).
+  - Fixed build failure in `ipc_handlers.c` (missing `report_task_args` and `cmd_report_task` definitions).
+
+- **10:44**: Implemented Concurrency Strategy (Thread Pool & Signalfd):
+  - **Thread Pool**: Added generic, fixed-size thread pool (`src/util/thread_pool.c`) with lightweight task queue.
+  - **Signalfd**: Integrated proper non-blocking signal handling for `SIGCHLD` to supervise plugins without `waitpid` polling loops.
+  - **Async IPC**: Refactored `server.c` to offload high-volume `CMD_REPORT` messages (sensor data ingestion) to the thread pool, freeing up the main event loop.
+  - **Thread-Safe DB**: Added mutex protection to `src/db/db.c` to support concurrent writes from worker threads.
+  - **Testing**: Added comprehensive unit tests for thread pool and verified end-to-end integration.
+
+- **10:20**: Implemented SDK Plugin Taxonomy ([impl_plan_taxonomy.md](impl_plan_taxonomy.md)):
   - **Capabilities**: Support for declaring and enforcing plugin capabilities (Actuate, Report, etc.).
   - **Manifest**: Parsing for `capabilities`, `devices`, `credentials`.
   - **SDK API**: Added `sdk_credential_get` and `sdk_device_setpoint`.

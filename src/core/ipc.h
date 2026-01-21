@@ -124,4 +124,59 @@ int ipc_server_fd(const ipc_server *srv);
  */
 int ipc_conn_fd(const ipc_conn *conn);
 
+/* ============================================================
+ * EPOLL-BASED EVENT POLLING
+ * ============================================================ */
+
+#include <stdbool.h>
+#include <stdint.h>
+struct epoll_event;  // Forward declaration
+
+/**
+ * Get the epoll file descriptor for this server.
+ *
+ * @param srv IPC server
+ * @return epoll FD or -1 if invalid
+ */
+int ipc_server_get_epoll_fd(const ipc_server *srv);
+
+/**
+ * Poll for events using epoll_wait.
+ *
+ * @param srv        IPC server
+ * @param events     Array to receive events
+ * @param max_events Maximum events to return
+ * @param timeout_ms Timeout in milliseconds (-1 for indefinite)
+ * @return Number of events, 0 on timeout, negative errno on error
+ */
+int ipc_server_poll(ipc_server *srv, struct epoll_event *events, int max_events, int timeout_ms);
+
+/**
+ * Unregister a connection from epoll before destroying it.
+ *
+ * @param srv  IPC server
+ * @param conn Connection to unregister
+ * @return 0 on success, negative errno on error
+ */
+int ipc_server_unregister_conn(ipc_server *srv, ipc_conn *conn);
+
+/**
+ * Update epoll events for a connection.
+ *
+ * @param srv    IPC server
+ * @param conn   Connection to update
+ * @param events New event mask (EPOLLIN, EPOLLOUT, etc.)
+ * @return 0 on success, negative errno on error
+ */
+int ipc_server_update_conn_events(ipc_server *srv, ipc_conn *conn, uint32_t events);
+
+/**
+ * Check if an event pointer is the listen socket.
+ *
+ * @param srv       IPC server
+ * @param event_ptr Pointer from epoll_event.data.ptr
+ * @return true if this is the listen event, false otherwise
+ */
+bool ipc_server_is_listen_event(const ipc_server *srv, void *event_ptr);
+
 #endif /* HEIMWATT_IPC_H */

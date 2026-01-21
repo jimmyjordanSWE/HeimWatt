@@ -146,6 +146,18 @@ extern void test_ring_buffer_basics(void);
 extern void test_ring_buffer_overwrite(void);
 extern void test_ring_buffer_json(void);
 
+// --- test_thread_pool.c ---
+extern void test_thread_pool_create_destroy(void);
+extern void test_thread_pool_submit_simple(void);
+extern void test_thread_pool_concurrency(void);
+extern void test_thread_pool_invalid_args(void);
+
+// --- test_sdk_eventloop.c ---
+extern void test_sdk_eventloop_create_destroy(void);
+extern void test_sdk_eventloop_fd(void);
+extern void test_sdk_eventloop_ticker(void);
+extern void test_sdk_eventloop_remove_fd(void);
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -245,6 +257,18 @@ int main(void)
     RUN_TEST(test_ring_buffer_basics);
     RUN_TEST(test_ring_buffer_overwrite);
     RUN_TEST(test_ring_buffer_json);
+
+    // ======== Thread Pool Tests ========
+    RUN_TEST(test_thread_pool_create_destroy);
+    RUN_TEST(test_thread_pool_submit_simple);
+    RUN_TEST(test_thread_pool_concurrency);
+    RUN_TEST(test_thread_pool_invalid_args);
+
+    // ======== SDK Event Loop Tests ========
+    RUN_TEST(test_sdk_eventloop_create_destroy);
+    RUN_TEST(test_sdk_eventloop_fd);
+    RUN_TEST(test_sdk_eventloop_ticker);
+    RUN_TEST(test_sdk_eventloop_remove_fd);
 
     return UNITY_END();
 }
