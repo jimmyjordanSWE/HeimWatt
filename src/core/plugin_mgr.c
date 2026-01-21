@@ -477,6 +477,49 @@ void plugin_mgr_stop_all(plugin_mgr *mgr)
     {
         stop_plugin(&mgr->plugins[i]);
     }
+
+    // Wait for them to exit (max 3 seconds)
+    int timeout_ms = 3000;
+    while (timeout_ms > 0)
+    {
+        int running = 0;
+        for (int i = 0; i < mgr->count; i++)
+        {
+            if (mgr->plugins[i].state != PLUGIN_STATE_STOPPED && mgr->plugins[i].pid > 0)
+            {
+                // Try to reap
+                int status;
+                pid_t ret = waitpid(mgr->plugins[i].pid, &status, WNOHANG);
+                if (ret > 0)
+                {
+                    mgr->plugins[i].state = PLUGIN_STATE_STOPPED;
+                    mgr->plugins[i].pid = 0;
+                }
+                else
+                {
+                    running++;
+                }
+            }
+        }
+
+        if (running == 0) break;
+
+        usleep(100000);  // 100ms
+        timeout_ms -= 100;
+    }
+
+    // Force kill if still running
+    for (int i = 0; i < mgr->count; i++)
+    {
+        if (mgr->plugins[i].state != PLUGIN_STATE_STOPPED && mgr->plugins[i].pid > 0)
+        {
+            log_warn("[PLUGIN] Plugin %s did not stop, sending SIGKILL", mgr->plugins[i].id);
+            kill(mgr->plugins[i].pid, SIGKILL);
+            waitpid(mgr->plugins[i].pid, NULL, 0);  // Reap zombie
+            mgr->plugins[i].state = PLUGIN_STATE_STOPPED;
+            mgr->plugins[i].pid = 0;
+        }
+    }
 }
 
 /* ============================================================

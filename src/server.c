@@ -283,6 +283,13 @@ static int http_async_handler(const http_request *req, http_response *resp, cons
 
 static void *http_thread_func(void *arg)
 {
+    /* Block SIGINT/SIGTERM in this thread so main thread receives them */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+
     heimwatt_ctx *ctx = (heimwatt_ctx *) arg;
     http_server_run(ctx->http);
     return NULL;
@@ -438,10 +445,51 @@ cleanup:
 
 void heimwatt_run(heimwatt_ctx *ctx) { heimwatt_run_with_shutdown_flag(ctx, NULL); }
 
+// Sentinel for signalfd epoll event
+static char SIGNAL_FD_TAG;
+
 void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomic_t *shutdown_flag)
 {
     if (!ctx) return;
     atomic_store(&ctx->running, 1);
+
+    // 1. Setup signalfd for SIGINT/SIGTERM
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+
+    // Signalfd must be non-blocking for epoll
+    int sfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+    if (sfd < 0)
+    {
+        log_fatal("[CORE] Failed to create signalfd: %s", strerror(errno));
+        atomic_store(&ctx->running, 0);
+        return;
+    }
+
+    // 2. Add signalfd to IPC epoll loop
+    int epoll_fd = ipc_server_get_epoll_fd(ctx->ipc);
+    if (epoll_fd < 0)
+    {
+        log_fatal("[CORE] Failed to get internal epoll fd");
+        close(sfd);
+        atomic_store(&ctx->running, 0);
+        return;
+    }
+
+    struct epoll_event sig_ev;
+    memset(&sig_ev, 0, sizeof(sig_ev));
+    sig_ev.events = EPOLLIN;
+    sig_ev.data.ptr = &SIGNAL_FD_TAG;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sfd, &sig_ev) < 0)
+    {
+        log_fatal("[CORE] Failed to add signalfd to epoll: %s", strerror(errno));
+        close(sfd);
+        atomic_store(&ctx->running, 0);
+        return;
+    }
 
     enum
     {
@@ -460,34 +508,57 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
         }
         else
         {
-            log_info("[CORE] HTTP server thread started (epoll-based, non-blocking)");
+            log_info("[CORE] HTTP server thread started");
         }
     }
 
     while (atomic_load(&ctx->running) && !g_shutdown && !(shutdown_flag && *shutdown_flag))
     {
+        // log_info("[CORE] Entering poll...");
         int n = ipc_server_poll(ctx->ipc, events, MAX_EVENTS, 1000);
+        // log_info("[CORE] Exited poll, n=%d", n);
+
+        if (n == 0)
+        {
+            // Timeout - intended behavior for periodic tasks
+        }
 
         if (n < 0)
         {
             if (n == -EINTR)
             {
+                // Should not happen often with signalfd, but check flags
+                if (shutdown_flag && *shutdown_flag) break;
+                if (g_shutdown) break;
                 continue;
             }
             log_error("[CORE] epoll_wait failed: %s", strerror(-n));
             break;
         }
 
-        if (n > 0)
-        {
-            // Process events
-        }
-
-        // Process events
         for (int i = 0; i < n; i++)
         {
             void *ptr = events[i].data.ptr;
             uint32_t ev = events[i].events;
+
+            // --- SIGNAL HANDLING ---
+            if (ptr == &SIGNAL_FD_TAG)
+            {
+                struct signalfd_siginfo fdsi;
+                ssize_t s = read(sfd, &fdsi, sizeof(struct signalfd_siginfo));
+                if (s == sizeof(struct signalfd_siginfo))
+                {
+                    if (fdsi.ssi_signo == SIGINT)
+                        log_info("[CORE] Received SIGINT via signalfd");
+                    else if (fdsi.ssi_signo == SIGTERM)
+                        log_info("[CORE] Received SIGTERM via signalfd");
+
+                    atomic_store(&ctx->running, 0);  // Stop loop
+                }
+                continue;
+            }
+
+            // --- IPC HANDLING ---
 
             // 1. Check for listen socket event (new connection)
             if (ipc_server_is_listen_event(ctx->ipc, ptr))
@@ -500,12 +571,11 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                         pthread_mutex_lock(&ctx->conn_lock);
                         ctx->conns[ctx->conn_count++] = new_conn;
                         pthread_mutex_unlock(&ctx->conn_lock);
-                        log_debug("[IPC] New connection accepted (pending hello)");
+                        log_debug("[IPC] New connection accepted");
                     }
                     else
                     {
-                        log_warn("[IPC] Connection rejected: max plugins reached (%d)",
-                                 MAX_PLUGIN_CONNECTIONS);
+                        log_warn("[IPC] Connection rejected: max plugins reached");
                         ipc_server_unregister_conn(ctx->ipc, new_conn);
                         ipc_conn_destroy(&new_conn);
                     }
@@ -517,13 +587,11 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
             ipc_conn *conn = (ipc_conn *) ptr;
             int disconnect = 0;
 
-            // Handle errors
             if (ev & (EPOLLERR | EPOLLHUP))
             {
                 disconnect = 1;
             }
 
-            // Handle OUTPUT
             if (!disconnect && (ev & EPOLLOUT))
             {
                 if (ipc_conn_flush(conn) < 0)
@@ -532,12 +600,10 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                 }
                 else if (!ipc_conn_has_pending(conn))
                 {
-                    // No more pending data, switch back to read-only
                     ipc_server_update_conn_events(ctx->ipc, conn, EPOLLIN);
                 }
             }
 
-            // Handle INPUT (if still connected)
             if (!disconnect && (ev & EPOLLIN))
             {
                 char *msg = NULL;
@@ -547,14 +613,12 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                 {
                     disconnect = 1;
                 }
-                else if (res > 0 && msg)
+                else if (res == 0 && msg)
                 {
-                    // Process message(s) - may contain multiple lines
                     char *p = msg;
                     const char *end = NULL;
                     while ((size_t) (p - msg) < len && *p)
                     {
-                        // Skip whitespace
                         while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')) p++;
                         if (!*p) break;
 
@@ -568,13 +632,12 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                         }
                         else
                         {
-                            break;  // Error or incomplete
+                            break;
                         }
                         p = end;
                     }
                     free(msg);
 
-                    // Check if we need to register for write events
                     if (ipc_conn_has_pending(conn))
                     {
                         ipc_server_update_conn_events(ctx->ipc, conn, EPOLLIN | EPOLLOUT);
@@ -584,7 +647,7 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
 
             if (disconnect)
             {
-                // Find connection index
+                // Handle disconnection
                 int conn_idx = -1;
                 pthread_mutex_lock(&ctx->conn_lock);
                 for (int j = 0; j < ctx->conn_count; j++)
@@ -601,7 +664,6 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                     const char *pid = ipc_conn_plugin_id(conn);
                     log_info("[PLUGIN] Disconnected: '%s'", pid ? pid : "unknown");
 
-                    // Clean up registered endpoints for this plugin
                     if (pid)
                     {
                         for (int k = 0; k < ctx->registry_count; k++)
@@ -609,16 +671,14 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                             if (strcmp(ctx->registry[k].plugin_id, pid) == 0)
                             {
                                 ctx->registry[k] = ctx->registry[--ctx->registry_count];
-                                k--;  // Re-check swapped element
+                                k--;
                             }
                         }
                     }
 
-                    // Unregister from epoll before destroying
                     ipc_server_unregister_conn(ctx->ipc, conn);
                     ipc_conn_destroy(&conn);
 
-                    // Shift
                     ctx->conns[conn_idx] = ctx->conns[ctx->conn_count - 1];
                     ctx->conn_count--;
                 }
@@ -626,12 +686,23 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
             }
         }
 
-        // Fallback: Also check periodically to handle lost signals or race conditions
+        // Periodic tasks
         (void) plugin_mgr_check_health(ctx->plugins);
 
-        // CSV Backend Tick (Flush check) at the end of the tick
-        db_tick(ctx->db);
+        static time_t last_tick = 0;
+        time_t now = time(NULL);
+        if (now - last_tick >= 1)
+        {
+            db_tick(ctx->db);
+            last_tick = now;
+        }
     }
+
+    log_info("[CORE] Shutdown sequence initiated");
+
+    // Cleanup signals
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, sfd, NULL);
+    close(sfd);
 
     // Stop HTTP Thread
     if (ctx->http)
@@ -642,15 +713,8 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
         log_info("[CORE] HTTP server stopped");
     }
 
-    // Log shutdown reason (safe here, outside signal context)
-    if (shutdown_flag && *shutdown_flag)
-    {
-        log_info("[CORE] Shutdown requested via signal");
-    }
-    else if (g_shutdown)
-    {
-        log_info("[CORE] Shutdown requested via global flag");
-    }
+    // Stop Plugins (send signal or just let them die when IPC closes?)
+    // plugin_mgr_stop_all(ctx->plugins); // If we have this function
 
     atomic_store(&ctx->running, 0);
 }
@@ -662,18 +726,51 @@ void heimwatt_destroy(heimwatt_ctx **ctx_ptr)
 
     log_info("[SHUTDOWN] Cleaning up...");
 
-    // Stop plugins first
-    plugin_mgr_stop_all(ctx->plugins);
+    // 1. Stop Plugins (Ensure all child processes are killed/waited)
+    if (ctx->plugins)
+    {
+        plugin_mgr_stop_all(ctx->plugins);
+    }
+
+    // 2. Stop Thread Pool (Wait for all pending tasks)
+    // NOTE: This MUST happen before we destroy resources (IPC/DB) if tasks depend on them.
+    if (ctx->pool)
+    {
+        log_info("[SHUTDOWN] Stopping thread pool...");
+        thread_pool_destroy(&ctx->pool);
+        log_info("[SHUTDOWN] Thread pool stopped");
+    }
+
+    // 3. Destroy HTTP Server (Frees memory, but loop is already stopped)
+    if (ctx->http)
+    {
+        http_server_destroy(&ctx->http);
+    }
+
+    // 4. Destroy IPC Server (Closes sockets)
+    if (ctx->ipc)
+    {
+        ipc_server_destroy(&ctx->ipc);
+    }
+
+    // 5. Cleanup plugin manager memory
     plugin_mgr_destroy(&ctx->plugins);
 
-    db_close(&ctx->db);
-    ipc_server_destroy(&ctx->ipc);
-    http_server_destroy(&ctx->http);
-    thread_pool_destroy(&ctx->pool);
-
+    // 6. Close Clean up IPC connections (just in case any remain)
+    pthread_mutex_lock(&ctx->conn_lock);
     for (int i = 0; i < ctx->conn_count; i++)
     {
-        ipc_conn_destroy(&ctx->conns[i]);
+        if (ctx->conns[i]) ipc_conn_destroy(&ctx->conns[i]);
+    }
+    ctx->conn_count = 0;
+    pthread_mutex_unlock(&ctx->conn_lock);
+
+    // 7. Close Database
+    if (ctx->db)
+    {
+        log_info("[SHUTDOWN] Closing database...");
+        db_close(&ctx->db);
+        log_info("[SHUTDOWN] Database closed");
     }
 
     log_info("[SHUTDOWN] HeimWatt Core stopped");

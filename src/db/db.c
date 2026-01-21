@@ -189,6 +189,7 @@ int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double
 {
     if (!db || db->count == 0) return -EINVAL;
 
+    pthread_mutex_lock(&db->lock);
     int primary_ret = 0;
 
     for (size_t i = 0; i < db->count; i++)
@@ -205,6 +206,7 @@ int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double
             /* Continue — don't fail the whole operation */
         }
     }
+    pthread_mutex_unlock(&db->lock);
 
     return primary_ret;
 }
@@ -245,6 +247,7 @@ int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const cha
 {
     if (!db || db->count == 0) return -EINVAL;
 
+    pthread_mutex_lock(&db->lock);
     int primary_ret = 0;
 
     for (size_t i = 0; i < db->count; i++)
@@ -260,6 +263,7 @@ int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const cha
             log_warn("[DB] Secondary '%s' tier2 write failed: %d", db->backends[i].uri, ret);
         }
     }
+    pthread_mutex_unlock(&db->lock);
 
     return primary_ret;
 }
@@ -281,16 +285,20 @@ int db_tick(db_handle *db)
 {
     if (!db) return -EINVAL;
 
-    pthread_mutex_lock(&db->lock);
-    /* Tick all backends */
-    for (size_t i = 0; i < db->count; i++)
+    if (pthread_mutex_trylock(&db->lock) == 0)
     {
-        if (db->backends[i].ops->tick)
+        /* Tick all backends */
+        for (size_t i = 0; i < db->count; i++)
         {
-            db->backends[i].ops->tick(db->backends[i].ctx);
+            if (db->backends[i].ops->tick)
+            {
+                db->backends[i].ops->tick(db->backends[i].ctx);
+            }
         }
+        pthread_mutex_unlock(&db->lock);
+        return 0;
     }
-    return 0;
+    return -EBUSY;
 }
 
 void db_set_interval(db_handle *db, int interval_sec)

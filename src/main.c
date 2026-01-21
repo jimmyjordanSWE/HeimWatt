@@ -7,14 +7,6 @@
 #include "log.h"
 #include "server.h"
 
-static volatile sig_atomic_t g_shutdown_requested = 0;
-
-static void signal_handler(int sig)
-{
-    (void) sig;
-    g_shutdown_requested = 1;
-}
-
 int main(int argc, char **argv)
 {
     // Set default log level (will be overridden by init if verbose)
@@ -42,25 +34,26 @@ int main(int argc, char **argv)
 
     log_info("[MAIN] Storage path: %s", data_path);
 
-    // Setup signal handlers
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = signal_handler;
-    sa.sa_flags = 0;  // DISABLE SA_RESTART
-    sigemptyset(&sa.sa_mask);
+    /*
+     * BLOCK SIGINT/SIGTERM GLOBALLY
+     * We use signalfd() in the main event loop to handle these signals synchronously.
+     * For signalfd to work, the signals MUST be blocked in all threads.
+     * Since this is the main thread and we haven't spawned threads yet,
+     * this mask will be inherited by all future threads.
+     */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    sigaddset(&mask, SIGPIPE);  // Ignore SIGPIPE usually, blocking is also fine if handled
 
-    if (sigaction(SIGINT, &sa, NULL) == -1)
+    if (pthread_sigmask(SIG_BLOCK, &mask, NULL) != 0)
     {
-        perror("sigaction SIGINT");
-    }
-    if (sigaction(SIGTERM, &sa, NULL) == -1)
-    {
-        perror("sigaction SIGTERM");
+        perror("pthread_sigmask");
+        return 1;
     }
 
-    signal(SIGPIPE, SIG_IGN);
-
-    // Initialize Core
+    // Initialize Core (this creates DuckDB threads, thread pool, etc.)
     heimwatt_ctx *ctx = heimwatt_create();
     if (!ctx)
     {
@@ -75,8 +68,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Run (Blocking)
-    heimwatt_run_with_shutdown_flag(ctx, &g_shutdown_requested);
+    // Run (Blocking) - Handles signals via signalfd
+    heimwatt_run(ctx);
 
     log_info("[MAIN] Exit");
     heimwatt_destroy(&ctx);

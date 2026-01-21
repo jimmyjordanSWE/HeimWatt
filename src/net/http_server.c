@@ -332,6 +332,7 @@ int http_server_run(http_server *srv)
 
     int opt = 1;
     setsockopt(srv->listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(srv->listen_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -341,8 +342,9 @@ int http_server_run(http_server *srv)
 
     if (bind(srv->listen_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
     {
-        log_error("[HTTP] Bind failed: %s", strerror(errno));
+        log_error("[HTTP] Bind failed on port %d: %s", srv->port, strerror(errno));
         close(srv->listen_fd);
+        srv->listen_fd = -1;
         return -1;
     }
 
@@ -386,7 +388,12 @@ int http_server_run(http_server *srv)
 
         if (nfds < 0)
         {
-            if (errno == EINTR) continue;
+            if (errno == EINTR)
+            {
+                /* Check running flag after signal interruption */
+                if (!atomic_load(&srv->running)) break;
+                continue;
+            }
             log_error("[HTTP] epoll_wait error: %s", strerror(errno));
             break;
         }

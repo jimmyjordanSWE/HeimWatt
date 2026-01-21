@@ -22,13 +22,80 @@ static int duckdb_backend_open(void **ctx_out, const char *path)
     duckdb_ctx *ctx = mem_alloc(sizeof(*ctx));
     if (!ctx) return -ENOMEM;
 
-    /* Open database */
-    if (duckdb_open(path, &ctx->db) == DuckDBError)
+    char wal_path[512];
+    char backup_path[512];
+    snprintf(wal_path, sizeof(wal_path), "%s.wal", path);
+    snprintf(backup_path, sizeof(backup_path), "%s.backup", path);
+
+    /* Stage 1: Try normal open */
+    if (duckdb_open(path, &ctx->db) == DuckDBSuccess)
     {
-        log_error("[DuckDB] Failed to open database at %s", path);
-        mem_free(ctx);
-        return -EIO;
+        goto db_opened;
     }
+
+    /* Stage 2: Remove stale WAL and retry */
+    if (access(wal_path, F_OK) == 0)
+    {
+        log_warn("[DuckDB] Found stale WAL file, removing: %s", wal_path);
+        unlink(wal_path);
+
+        if (duckdb_open(path, &ctx->db) == DuckDBSuccess)
+        {
+            log_info("[DuckDB] Recovered after WAL cleanup");
+            goto db_opened;
+        }
+    }
+
+    /* Stage 3: Database file itself is corrupted - restore from backup or create fresh */
+    if (access(backup_path, F_OK) == 0)
+    {
+        log_warn("[DuckDB] Database corrupted, restoring from backup: %s", backup_path);
+        unlink(path);     /* Remove corrupted file */
+        unlink(wal_path); /* Remove any WAL if exists */
+
+        /* Copy backup to main path */
+        FILE *src = fopen(backup_path, "rb");
+        FILE *dst = fopen(path, "wb");
+        if (src && dst)
+        {
+            char buf[8192];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof(buf), src)) > 0)
+            {
+                fwrite(buf, 1, n, dst);
+            }
+            fclose(src);
+            fclose(dst);
+
+            if (duckdb_open(path, &ctx->db) == DuckDBSuccess)
+            {
+                log_info("[DuckDB] Recovered from backup");
+                goto db_opened;
+            }
+        }
+        else
+        {
+            if (src) fclose(src);
+            if (dst) fclose(dst);
+        }
+    }
+
+    /* Stage 4: Delete everything and create fresh database */
+    log_warn("[DuckDB] All recovery attempts failed, creating fresh database");
+    unlink(path);
+    unlink(wal_path);
+
+    if (duckdb_open(path, &ctx->db) == DuckDBSuccess)
+    {
+        log_info("[DuckDB] Created fresh database at %s", path);
+        goto db_opened;
+    }
+
+    log_error("[DuckDB] Failed to open database at %s (all recovery attempts failed)", path);
+    mem_free(ctx);
+    return -EIO;
+
+db_opened:
 
     /* Connect */
     if (duckdb_connect(ctx->db, &ctx->con) == DuckDBError)
@@ -80,8 +147,17 @@ static void duckdb_backend_close(void **ctx_ptr)
 
     if (ctx->connected)
     {
+        // Force checkpoint to ensure all data is written to disk
+        duckdb_result result;
+        if (duckdb_query(ctx->con, "CHECKPOINT", &result) != DuckDBError)
+        {
+            duckdb_destroy_result(&result);
+        }
+
+        // Close connection first, then database
         duckdb_disconnect(&ctx->con);
         duckdb_close(&ctx->db);
+        ctx->connected = false;
     }
     mem_free(ctx);
     *ctx_ptr = NULL;
