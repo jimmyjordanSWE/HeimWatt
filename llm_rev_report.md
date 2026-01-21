@@ -1,6 +1,6 @@
 # LLM Semantic & Architectural Code Review
 
-> **Review Date**: 2026-01-20  
+> **Review Date**: 2026-01-21  
 > **Scope**: `src/` and `include/`  
 > **Reviewer**: Semantic LLM Review (per `/.agent/workflows/llm_review.md`)
 
@@ -8,195 +8,574 @@
 
 ## Executive Summary
 
-The HeimWatt codebase demonstrates a **mature architectural foundation** with strong adherence to project standards. The opaque pointer pattern is consistently used, lifecycle pairs are symmetric (`create/destroy`, `init/fini`), and error handling follows the `-errno` convention throughout.
-
-However, this review identified **3 medium-severity** architectural issues and **2 minor** observations that warrant attention. No critical issues were found that would cause data loss or security vulnerabilities under normal operation.
+The HeimWatt codebase has undergone substantial development and the previous review's findings have been addressed. This follow-up review identified **1 high-severity architectural issue** relating to god function complexity, **2 medium-severity** concerns, and **3 minor** observations. The overall architecture demonstrates sound engineering principles with proper module boundaries and consistent patterns.
 
 ---
 
 ## Findings
 
-### 1. 🟡 **Static Buffer Reuse in `plugin_get_provided_types` and `find_providers_for_type`**
+### 1. 🔴 **God Function: `handle_json` (349 LOC)**
 
-| Severity | Standard Violated |
-|----------|-------------------|
-| **Medium** | [Resource Safety §5.3](file:///home/jimmy/HeimWatt/old_docs/docs/coding_standards.md#L583-590) - Thread Safety |
+| Field | Value |
+|-------|-------|
+| **Severity** | High |
+| **Standard Violated** | [Core Principles §3](docs/standards/coding.md#L20-21) - Single Responsibility |
+| **Location** | [server.c:419-767](src/server.c#L419-767) |
 
-**Location**: [plugin_mgr.c:606-648](file:///home/jimmy/HeimWatt/src/core/plugin_mgr.c#L606-648), [plugin_mgr.c:654-683](file:///home/jimmy/HeimWatt/src/core/plugin_mgr.c#L654-683)
+**Issue**: The `handle_json` function is a 349-line monolith that handles **11 different IPC command types**:
+- `report` (data ingestion)
+- `config` (configuration requests)
+- `lookup` (type lookup)
+- `check_data` (data existence check)
+- `query_range` (range queries)
+- `query_latest` (latest value queries)
+- `register_endpoint` (HTTP endpoint registration)
+- `http_response` (async HTTP responses)
+- `request_data` (on-demand fetch)
+- `log` (SDK logging)
+- `hello` (plugin handshake)
 
-**Issue**: Both functions return pointers to `static` arrays:
+This violates the Single Responsibility Principle. Each command handler mixes parsing, business logic, and response formatting. The function is difficult to test in isolation, and adding new commands requires modifying this central dispatcher.
+
+**Recommendation**: Extract each command into its own static handler function:
 
 ```c
-static const char *types[65];  // Line 608
-static const char *providers[33];  // Line 656
-```
+// Pattern: cmd_<command>_handler
+static void cmd_report_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json);
+static void cmd_config_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json);
+static void cmd_query_range_handler(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json);
+// ... etc
 
-These static buffers are overwritten on each call, creating a **race condition** if the system ever becomes multi-threaded. Additionally, calling `plugin_get_provided_types` from within a loop while iterating over `find_providers_for_type` corrupts the returned data:
-
-```c
-for (int i = 0; i < mgr->count && count < 32; i++) {
-    const char **types = plugin_get_provided_types(h);  // Overwrites static buffer
-    // Inner loop uses `types` which may be corrupted by next iteration
+static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json) {
+    cJSON *cmd = cJSON_GetObjectItem(json, "cmd");
+    if (!cmd || !cmd->valuestring) return;
+    
+    // Dispatch table
+    static const struct {
+        const char *name;
+        void (*fn)(heimwatt_ctx*, ipc_conn*, cJSON*);
+    } handlers[] = {
+        {"report", cmd_report_handler},
+        {"config", cmd_config_handler},
+        {"query_range", cmd_query_range_handler},
+        // ...
+    };
+    
+    for (size_t i = 0; i < ARRAY_LEN(handlers); i++) {
+        if (strcmp(cmd->valuestring, handlers[i].name) == 0) {
+            handlers[i].fn(ctx, conn, json);
+            return;
+        }
+    }
+    
+    log_warn("[IPC] Unknown command: '%s'", cmd->valuestring);
 }
 ```
 
-**Recommendation**: Either:
-1. Pass a caller-owned buffer as an output parameter, or
-2. Return dynamically allocated memory (caller frees), or
-3. Accept the limitation and **document** that these are not thread-safe and must not be nested.
+This pattern makes each handler independently testable, and new commands can be added without modifying the dispatcher logic.
 
 ---
 
-### 2. 🟡 **Missing `strncpy` NULL-Termination Guarantee in HTTP Server**
+### 2. 🟡 **Large Function: `sdk_run` (269 LOC)**
 
-| Severity | Standard Violated |
-|----------|-------------------|
-| **Medium** | [Safe Functions §5.4](file:///home/jimmy/HeimWatt/old_docs/docs/coding_standards.md#L675-693) - Banned Functions |
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Standard Violated** | [Core Principles §3](docs/standards/coding.md#L20-21) - Single Responsibility |
+| **Location** | [lifecycle.c:130-398](src/sdk/lifecycle.c#L130-398) |
 
-**Location**: [http_server.c:643-644](file:///home/jimmy/HeimWatt/src/net/http_server.c#L643-644)
+**Issue**: The `sdk_run` function handles:
+1. History configuration parsing
+2. Backfill mode logic
+3. Poll fd setup
+4. Timeout calculation
+5. IPC message handling
+6. HTTP request dispatching
+7. User FD callbacks
+8. Ticker scheduling
 
-**Issue**: The async pending request handling uses `strncpy` without guaranteed null-termination:
+**Recommendation**: Extract coherent sub-operations:
 
 ```c
-strncpy(srv->pending[srv->pending_count].request_id, conn->request_id, REQUEST_ID_LEN);
+static void sdk_run_backfill(plugin_ctx *ctx);
+static int  sdk_prepare_poll_fds(plugin_ctx *ctx, struct pollfd *fds);
+static int  sdk_calculate_timeout(plugin_ctx *ctx);
+static void sdk_handle_ipc_message(plugin_ctx *ctx, const char *buf);
+static void sdk_dispatch_tickers(plugin_ctx *ctx);
 ```
 
-If `conn->request_id` is exactly `REQUEST_ID_LEN` bytes, the destination is not null-terminated. Coding standards explicitly list `strncpy()` as discouraged due to this behavior.
+#### Analysis: Should We Go Further with Helper Modules?
 
-**Recommendation**: Use `snprintf` for safe copying:
+**Yes, there's a strong case for creating an `sdk_eventloop` module.** Here's my analysis:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Keep in `lifecycle.c`** | Single file, less indirection | 269 LOC, hard to test, mixes concerns |
+| **Extract static helpers** | Reduces visual complexity, keeps locality | Still one translation unit, no reuse |
+| **Create `sdk_eventloop.c`** | Reusable, testable, clear separation | More files, slightly more complexity |
+
+**My recommendation**: Create a **`src/sdk/eventloop.c`** module with:
+
 ```c
-snprintf(srv->pending[srv->pending_count].request_id, REQUEST_ID_LEN, "%s", conn->request_id);
+// sdk_eventloop.h
+typedef struct sdk_eventloop sdk_eventloop;
+
+sdk_eventloop *sdk_eventloop_create(void);
+void sdk_eventloop_destroy(sdk_eventloop **loop);
+
+// Register callbacks
+int sdk_eventloop_add_fd(sdk_eventloop *loop, int fd, sdk_fd_handler handler, void *ctx);
+int sdk_eventloop_add_ticker(sdk_eventloop *loop, int interval_sec, sdk_ticker_handler handler, void *ctx);
+
+// Run loop (blocking)
+int sdk_eventloop_run(sdk_eventloop *loop);
+void sdk_eventloop_stop(sdk_eventloop *loop);
 ```
+
+This mirrors the pattern you already have with `tcp_server.c` and `http_server.c`. The SDK's event loop is a distinct abstraction that could:
+1. Be tested independently
+2. Be reused if you ever need another event-driven component
+3. Make `lifecycle.c` focus on SDK lifecycle (create/destroy/connect) rather than event dispatch
+
+**However**, if the SDK is unlikely to change significantly, extracting static helper functions within `lifecycle.c` is a pragmatic middle ground that reduces function size without introducing new modules.
+
+Decision: approved for implementation. 
+
+> **Response**: Acknowledged. I'll create a design document for the `sdk_eventloop` module before implementation.
 
 ---
 
-### 3. 🟡 **Potential Unbounded IPC Read in SDK**
+### 3. 🟡 **Nested Loop Complexity in `heimwatt_run_with_shutdown_flag`**
 
-| Severity | Standard Violated |
-|----------|-------------------|
-| **Medium** | [Resource Safety](file:///home/jimmy/HeimWatt/old_docs/docs/coding_standards.md#L578) - Defensive Programming |
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Standard Violated** | [Hotspot Analysis](scripts/out/hotspots.txt) |
+| **Location** | [server.c:771-914](src/server.c#L771-914) |
 
-**Location**: [lifecycle.c:275-283](file:///home/jimmy/HeimWatt/src/sdk/lifecycle.c#L275-283)
-
-**Issue**: The SDK's IPC read does not use the buffered read pattern implemented in the core IPC module:
+**Issue**: The main loop contains up to **4 levels of nested loops** (hotspot analysis: `LOOP(4,L876)`). This deep nesting occurs during IPC message parsing where multiple JSON objects can arrive in a single buffer read:
 
 ```c
-ssize_t n = read(ctx->ipc_fd, buf, sizeof(buf) - 1);
-// ...
-cJSON *json = cJSON_Parse(buf);
+while (running) {                           // L1: Main loop
+    for (i = 0; i < conn_count; i++) {       // L2: Per-connection
+        while ((p - msg) < len) {             // L3: Per-message
+            cJSON_ArrayForEach(type_item, types) {  // L4: Per-type (in request_data)
 ```
 
-This assumes a complete JSON message arrives in a single read. Unlike the core's `ipc_conn_recv` which buffers and looks for newline delimiters, the SDK may receive partial messages or concatenated messages.
+Deep nesting increases cognitive load and makes the code harder to maintain.
 
-**Recommendation**: Port the buffered read logic from `ipc.c:ipc_conn_recv` to the SDK, or use the `ctx->ipc_buf` / `ipc_rpos` / `ipc_wpos` fields that are already defined in `sdk_internal.h` but not utilized.
+#### Analysis: Design Patterns to Reduce Loop Nesting
 
----
+You're right that hiding loops in function calls can be deceptive. Here are **structural alternatives** that eliminate loops rather than hide them:
 
-### 4. 🟢 **Duplicate Logging Initialization in `heimwatt_init`**
+##### Option 1: Message Queue Pattern (Eliminates L3)
 
-| Severity | Standard Violated |
-|----------|-------------------|
-| **Minor** | [Core Principles §1](file:///home/jimmy/HeimWatt/old_docs/docs/coding_standards.md#L16-22) - Single Responsibility |
-
-**Location**: [server.c:315-346](file:///home/jimmy/HeimWatt/src/server.c#L315-346)
-
-**Issue**: Logging is initialized twice:
+Instead of parsing multiple JSON objects inline, queue them for sequential processing:
 
 ```c
-// Line 316-322
-log_set_level(LOG_INFO);
-FILE *log_fp = fopen("heimwatt.log", "a");
-if (log_fp) {
-    log_add_fp(log_fp, LOG_TRACE);
-    ctx->log_file = log_fp;
+// In receive path: parse all messages, queue them
+while ((p - msg) < len) {
+    cJSON *json = cJSON_ParseWithOpts(p, &end, 0);
+    if (json) {
+        msg_queue_push(&ctx->pending_msgs, json);  // Queue, don't process
+        p = end;
+    }
 }
 
-// Line 335-346 (again)
-log_set_level(LOG_INFO);  // Duplicate
-char log_path[256];
-snprintf(log_path, sizeof(log_path), "%s/heimwatt.log", path);
-ctx->log_file = fopen(log_path, "a");  // Overwrites previous handle!
+// In main loop: process one message per iteration
+while (running) {
+    poll(...);
+    
+    // Process ONE pending message (no loop!)
+    cJSON *json = msg_queue_pop(&ctx->pending_msgs);
+    if (json) {
+        handle_json(ctx, conn, json);
+        cJSON_Delete(json);
+    }
+}
 ```
 
-The first log file handle opened at line 317 leaks when overwritten at line 341.
+**Result**: L3 disappears from the main loop body. The receive path still has a loop, but processing is serial.
 
-**Recommendation**: Remove the first logging block (lines 316-322) since the second one at line 335+ uses the proper path-based location.
+##### Option 2: Event-Driven Dispatch (Eliminates L2)
+
+Replace the per-connection loop with epoll/kqueue:
+
+```c
+// Already partially done in http_server.c!
+// Apply same pattern to IPC:
+while (running) {
+    int n = epoll_wait(epoll_fd, events, max, timeout);
+    for (int i = 0; i < n; i++) {
+        ipc_conn *conn = events[i].data.ptr;
+        handle_connection_event(ctx, conn, events[i].events);
+    }
+}
+```
+
+**You already do this for HTTP**. The IPC server could use the same pattern, eliminating the explicit per-connection iteration.
+
+##### Option 3: Iterator Abstraction (Eliminates L4)
+
+For the `cJSON_ArrayForEach` loop, use first-match semantics:
+
+```c
+// Instead of iterating all types:
+const char *first_type = json_array_first_string(types);
+if (first_type) {
+    // Handle it
+}
+```
+
+Or, if you need to process all types, accept that L4 is the **actual work** and is irreducible. The issue is more about where it lives than that it exists.
+
+##### My Recommendation
+
+**Option 2 is the cleanest path**: Unify IPC and HTTP under the same epoll-based event loop. This would:
+- Remove the explicit `for (i = 0; i < conn_count; i++)` loop
+- Make IPC handling consistent with HTTP handling
+- Allow future scaling (more connections, less polling overhead)
+
+Decision: Option 2 approved for implementation. 
+
+> **Response**: Acknowledged. This will unify the event model across the codebase and reduce the nested loop complexity.
+
+The L4 loop (`cJSON_ArrayForEach`) is honestly fine—it's doing real work. The problem is L2+L3 being visible together in the main loop.
 
 ---
 
-### 5. 🟢 **Forward Declaration Duplication in `http_server.c`**
+### 4. 🟢 **Use of `free()` Instead of `mem_free()` in SDK**
 
-| Severity | Standard Violated |
-|----------|-------------------|
-| **Minor** | Code Quality |
+| Field | Value |
+|-------|-------|
+| **Severity** | Minor |
+| **Standard Violated** | [Resource Management §5](docs/standards/coding.md#L710) - Banned Functions |
 
-**Location**: [http_server.c:108-109](file:///home/jimmy/HeimWatt/src/net/http_server.c#L108-109)
+**Locations**:
+- [lifecycle.c:148](src/sdk/lifecycle.c#L148): `free(hist_val);`
+- [lifecycle.c:162](src/sdk/lifecycle.c#L162): `free(rate_val);`
+- [lifecycle.c:339](src/sdk/lifecycle.c#L339): `free(str);`
+- [server.c:891](src/server.c#L891): `free(msg);`
 
-**Issue**: `conn_alloc` is forward-declared twice:
+**Issue**: The coding standards ban raw `malloc/free` in favor of tracked allocations via `mem_alloc/mem_free`. While cJSON's `cJSON_Print*` functions return `malloc`-allocated strings (and thus `free` is correct for those), the SDK's `sdk_get_config` and `ipc_conn_recv` use `mem_alloc`, meaning their callers should use `mem_free`.
+
+#### Analysis: Can `mem_free` Handle `malloc`-Allocated Memory?
+
+**Yes, but with caveats.** Here are your options:
+
+##### Option A: Make `mem_free` a Pass-Through (Simplest)
 
 ```c
-static http_conn *conn_alloc(http_server *srv);
-static http_conn *conn_alloc(http_server *srv);  // Duplicate
+// memory.c
+void mem_free(void *ptr) {
+    // Just call free() - it handles NULL and malloc'd memory
+    free(ptr);
+}
 ```
 
-**Recommendation**: Remove the duplicate declaration.
+**This works if**:
+- You don't need allocation tracking (you currently don't track counts)
+- You're okay with `mem_alloc` using `calloc` internally (which is compatible with `free`)
+
+**Current state**: Your `mem_alloc` already uses system allocator under the hood (via `calloc`), so `mem_free` calling `free()` is already compatible. The question is whether you want to add tracking later.
+##### Option B: Wrap cJSON Output (Consistent Ownership)
+
+```c
+// In cJSON wrapper (json.c):
+char *json_print(cJSON *json) {
+    char *raw = cJSON_PrintUnformatted(json);
+    if (!raw) return NULL;
+    
+    char *tracked = mem_strdup(raw);  // Copy to tracked memory
+    free(raw);                         // Free cJSON's allocation
+    return tracked;                    // Caller uses mem_free
+}
+```
+
+**Pros**: All strings from JSON are now `mem_free`-able.
+**Cons**: Extra copy, slightly slower.
+
+##### Option C: Accept the Duality (Document It)
+
+Keep `free()` for cJSON output, `mem_free()` for project allocations. Document this clearly:
+
+```c
+// Rule: cJSON_Print* returns malloc'd memory -> use free()
+//       Project APIs return mem_alloc'd memory -> use mem_free()
+```
+
+##### My Recommendation
+
+**Option A is the pragmatic choice.** Since `mem_alloc` already uses `calloc` internally, there's no functional difference between `free()` and `mem_free()` today. Making `mem_free` a simple wrapper around `free()` means you can always use `mem_free` and it will work.
+
+If you later want allocation tracking, implement it in `mem_alloc` and `mem_free` together—but you'd need to wrap cJSON's allocator too (cJSON supports custom allocators via `cJSON_InitHooks`).
+
+Decision: interesting finding because I was under the impression that we had forbidden catalogue and we always did under the hood. We always did malloc plus memset O. That's actually an error you found there, keep free for cJSON. But make sure the memory module is correct also.
+
+> **Response**: I checked `memory.c` and **the implementation is correct**. Lines 27-31 show:
+> ```c
+> void *ptr = malloc(size);
+> if (ptr) {
+>     memset(ptr, 0, size);
+> }
+> ```
+> So you are using `malloc` + `memset`, not `calloc`. The coding standards are being followed. The `free()` vs `mem_free()` issue is purely about which allocator owns the memory:
+> - cJSON uses `malloc` internally → use `free()`
+> - Project APIs use `mem_alloc` → use `mem_free()`
+> 
+> Both resolve to `free()` under the hood, so it's functionally equivalent, but semantically cleaner to match allocator with deallocator.
+
+Decision: approved for implementation. 
 
 ---
 
-## Positive Observations
+### 5. 🟢 **Missing Endpoint Cleanup on Plugin Disconnect**
 
-The following patterns demonstrate strong adherence to the coding standards:
+| Field | Value |
+|-------|-------|
+| **Severity** | Minor |
+| **Standard Violated** | [Resource Logic](docs/standards/coding.md#L581-590) |
+| **Location** | [server.c:895-909](src/server.c#L895-909) |
 
-### ✅ Opaque Pointer Pattern
+**Issue**: When a plugin disconnects, its registered endpoints remain in `ctx->registry`. While the endpoint won't be routed (no matching IPC connection), stale entries waste memory and could cause confusion in `/api/plugins` list output.
 
-All major modules correctly use forward declarations in headers with struct definitions hidden in `.c` files:
-
-- `heimwatt_ctx` in `server.h` / `server.c`
-- `plugin_mgr`, `plugin_handle` in `plugin_mgr.h` / `plugin_mgr.c`
-- `ipc_server`, `ipc_conn` in `ipc.h` / `ipc.c`
-- `http_server` in `http_server.h` / `http_server.c`
-- `db_handle` in `db.h` / `csv_backend.c`
-- `config` in `config.h` / `config.c`
-- `plugin_ctx` in `heimwatt_sdk.h` / `sdk_internal.h`
-
-### ✅ Symmetric Lifecycle Pairs
-
-All `create/destroy` pairs correctly use double-pointers to NULL the caller's handle:
+**Recommendation**: On plugin disconnect, iterate `ctx->registry` and remove entries matching the disconnected `plugin_id`:
 
 ```c
-void heimwatt_destroy(heimwatt_ctx **ctx_ptr);
-void plugin_mgr_destroy(plugin_mgr **mgr);
-void ipc_server_destroy(ipc_server **srv_ptr);
-void http_server_destroy(http_server **srv);
-void config_destroy(config **cfg);
-void sdk_destroy(plugin_ctx **ctx_ptr);
+// After ipc_conn_destroy:
+for (int j = 0; j < ctx->registry_count; j++) {
+    if (strcmp(ctx->registry[j].plugin_id, pid) == 0) {
+        ctx->registry[j] = ctx->registry[--ctx->registry_count];
+        j--;  // Recheck swapped entry
+    }
+}
 ```
+Decision: Remove dead code. We are in heavy dev. No legacy.
 
-### ✅ GOTO-Cleanup Pattern
+> **Response**: Acknowledged. I'll remove the `db_error_message` function declaration from `db.h` and any stub implementations.
 
-Multi-resource functions correctly use centralized cleanup:
+---
 
-- [ipc_server_init](file:///home/jimmy/HeimWatt/src/core/ipc.c#L41-89)
-- [http_server_run](file:///home/jimmy/HeimWatt/src/net/http_server.c#L300-413)
-- [sdk_create](file:///home/jimmy/HeimWatt/src/sdk/lifecycle.c#L16-55)
+### 6. 🟢 **`db_error_message` Not Implemented**
 
-### ✅ Const Correctness
+| Field | Value |
+|-------|-------|
+| **Severity** | Minor |
+| **Standard Violated** | [API Design](docs/standards/coding.md#L452-464) |
+| **Location** | [db.h:101](include/db.h#L99-101) |
 
-Public APIs consistently use `const` for read-only inputs:
+**Issue**: The `db_error_message` function is declared in the public header but appears to always return `NULL`. The callers already handle this (e.g., `server.c:458`), but it would be more useful if backends actually populated error messages.
+
+#### Analysis: Error Message Design Options
+
+This is a common design challenge in C: how to propagate detailed error information without global state. Here are architecturally sound options:
+
+##### Option 1: Thread-Local Error String (Simple, Works for Plugins)
 
 ```c
-const char *plugin_handle_id(const plugin_handle *h);
-int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, int64_t *out_ts);
+// db_backend.h (internal)
+static __thread char db_error_buf[256];
+
+void db_set_error(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(db_error_buf, sizeof(db_error_buf), fmt, args);
+    va_end(args);
+}
+
+const char *db_error_message(const db_handle *db) {
+    (void)db;  // Could be per-handle later
+    return db_error_buf[0] ? db_error_buf : NULL;
+}
 ```
 
-### ✅ Thread-Safe Atomics for State
+**Pros**: Thread-safe, simple, no per-handle memory.
+**Cons**: Error cleared on next operation, `__thread` not portable (but fine for Linux).
 
-The HTTP server and main context use `<stdatomic.h>` correctly:
+##### Option 2: Per-Handle Error Buffer (Most Flexible)
 
 ```c
-atomic_int running;  // In http_server and heimwatt_ctx
-atomic_int ref_count;  // In http_conn
+struct db_handle {
+    // ... existing fields ...
+    char last_error[256];
+};
+
+// In backend operations:
+int duckdb_insert_tier1(...) {
+    if (error) {
+        snprintf(db->last_error, sizeof(db->last_error), 
+                 "DuckDB: %s", duckdb_error(...));
+        return -EIO;
+    }
+    db->last_error[0] = '\0';  // Clear on success
+    return 0;
+}
 ```
+
+**Pros**: Error persists until next call on same handle, multi-handle safe.
+**Cons**: Slightly more memory per handle.
+
+##### Option 3: Callback/Observer Pattern (For Distributed Logging)
+
+If you want errors to flow to a central logging system (which you already have!):
+
+```c
+// Don't return error strings; log them immediately
+int duckdb_insert_tier1(...) {
+    if (error) {
+        log_error("[DB:DuckDB] Insert failed: %s", duckdb_error(...));
+        return -EIO;
+    }
+    return 0;
+}
+```
+
+Then `db_error_message` becomes unnecessary—errors are logged when they happen.
+
+##### My Recommendation for HeimWatt
+
+**Option 3 (log immediately, don't store)** fits your architecture best because:
+- You already have a centralized logging system (`log.c`)
+- Plugins communicate errors via IPC, not return values
+- The core server logs errors when they occur
+
+Deprecate `db_error_message` by:
+1. Adding `// DEPRECATED: Use logging instead` to the header
+2. Making backends call `log_error()` when errors occur
+3. Removing `db_error_message` in a future cleanup pass
+
+**If you need to display errors in the WebUI**, query recent log entries rather than per-handle error state.
+
+Q: so are, I was, I was thinking that the all modules should just include the log and then it can just log to the atomic log store. So that we have like one single logging master sort of is that how it works, explain more to me how it works before I can take a decision
+
+#### Analysis: How the Centralized Logging Architecture Works
+
+**Yes, that's exactly how it works.** Here's the full picture:
+
+##### Current Architecture
+
+```
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│  server.c   │   │ plugin_mgr  │   │  sdk/*.c    │
+│ #include    │   │ #include    │   │ #include    │
+│ "log.h"     │   │ "log.h"     │   │ "log.h"     │
+└──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+       │                 │                 │
+       ▼                 ▼                 ▼
+   log_info()        log_warn()        log_error()
+       │                 │                 │
+       └────────┬────────┴────────┬────────┘
+                │                 │
+                ▼                 ▼
+        ┌───────────────────────────────┐
+        │         log.c (rxi/log)       │
+        │  - Thread-safe (uses mutex)   │
+        │  - Multiple outputs           │
+        │    • stdout (with color)      │
+        │    • File (heimwatt.log)      │
+        └───────────────────────────────┘
+```
+
+##### How It Works Step-by-Step
+
+1. **Every module includes `log.h`** - This gives them access to `log_trace()`, `log_debug()`, `log_info()`, `log_warn()`, `log_error()`, `log_fatal()`.
+
+2. **Global state is internal to log.c** - The `rxi/log` library maintains:
+   - A log level filter (e.g., only show INFO and above)
+   - A list of output callbacks (console, file, custom)
+   - A mutex for thread-safety
+
+3. **Server initialization sets up outputs** - In `heimwatt_init()` you call:
+   ```c
+   log_set_level(LOG_INFO);           // Filter level
+   log_add_fp(log_file, LOG_TRACE);   // File gets everything
+   ```
+
+4. **All log calls go through the same path** - Whether from `server.c`, `plugin_mgr.c`, or `db.c`, they all end up in the same `log.c` which:
+   - Applies the level filter
+   - Calls each registered callback (console, file)
+   - Uses a mutex to ensure atomic writes (no interleaved output)
+
+##### What About Plugins?
+
+Plugins run in **separate processes**, so they can't directly call the core's `log.c`. Currently:
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│   Plugin (PID   │      IPC           │   Core Server   │
+│   123)          │ ──────────────────▶│                 │
+│                 │  {"cmd":"log",     │  handle_json()  │
+│ sdk_log(ctx,    │   "level":"info", │  → log_info()   │
+│  LOG_INFO, ..)  │   "msg":"..."}    │                 │
+└─────────────────┘                    └─────────────────┘
+```
+
+The SDK's `sdk_log()` sends a JSON message over IPC, and the core's `handle_json()` calls `log_info()` (or appropriate level). This way, all logs—from core and plugins—end up in the same file.
+
+##### Is This the Right Design?
+
+**Yes, this is the standard approach.** Benefits:
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Single source of truth** | One log file, one format, one configuration |
+| **Thread-safe** | `rxi/log` uses mutex internally |
+| **No global state leakage** | Modules only see the API, not the internals |
+| **Extensible** | Can add more outputs (syslog, remote, etc.) via callbacks |
+| **Cross-process** | Plugins route through IPC to the central logger |
+
+##### Potential Improvements
+
+1. **Structured logging** - Instead of formatted strings, log JSON:
+   ```c
+   log_json(LOG_INFO, "{\"event\":\"plugin_started\",\"id\":\"%s\"}", id);
+   ```
+   This makes logs machine-parseable for the WebUI.
+
+2. **Ring buffer for WebUI** - Keep last N log entries in memory for `/api/logs` endpoint:
+   ```c
+   static char log_ring[LOG_RING_SIZE][256];
+   static atomic_int log_ring_head;
+   ```
+
+3. **Log categories** - Add semantic prefixes you already use (`[INIT]`, `[PLUGIN]`, `[IPC]`) as first-class fields.
+
+##### Decision Required
+
+The current architecture is sound. The question is whether to enhance it:
+
+| Option | Effort | Benefit |
+|--------|--------|--------|
+| **Keep as-is** | None | Works fine for debugging |
+| **Add ring buffer** | Medium | WebUI can show recent logs |
+| **Structured JSON logs** | High | Full observability, but more work |
+
+**My recommendation**: Keep as-is for now. Add ring buffer later when the WebUI needs it.
+
+Decision: All the most advanced suggestions approved for implementation. LEts improve it right away. It we can improve it we  should.
+
+---
+
+## Architecture Assessment
+
+### ✅ Strengths
+
+| Pattern | Assessment |
+|---------|------------|
+| **Opaque Pointers** | Excellent. All stateful modules use forward declarations in headers. |
+| **Lifecycle Symmetry** | Excellent. All `create/destroy` pairs null the pointer. |
+| **Error Handling** | Good. Consistent `-errno` returns. GOTO-cleanup used appropriately. |
+| **Const Correctness** | Good. Read-only parameters correctly marked. |
+| **Thread Safety** | Good. Atomics used for running flags, mutexes protect shared state. |
+| **Memory Management** | Good. `HwBuffer`, `HwPool`, and `HwArena` reduce fragmentation. |
+
+### ⚠️ Areas for Improvement
+
+| Area | Assessment |
+|------|------------|
+| **Function Size** | Some functions exceed 100 LOC (`handle_json`: 349, `sdk_run`: 269). |
+| **Module Cohesion** | `server.c` (978 LOC) handles too many concerns. Consider splitting IPC command handling into a separate module. |
+| **Testing Surface** | Large functions are harder to unit test. Refactoring would improve testability. |
 
 ---
 
@@ -204,18 +583,30 @@ atomic_int ref_count;  // In http_conn
 
 | Category | Count |
 |----------|-------|
-| 🔴 Critical | 0 |
-| 🟡 Medium | 3 |
-| 🟢 Minor | 2 |
+| 🔴 High | 1 |
+| 🟡 Medium | 2 |
+| 🟢 Minor | 3 |
 
-The codebase is well-structured and follows a consistent architectural philosophy. The identified issues are localized and can be addressed without major refactoring.
+The codebase is architecturally sound with proper separation of concerns at the module level. The primary concern is **function-level complexity** in `server.c` and `sdk/lifecycle.c`. Refactoring these god functions into smaller, focused handlers would improve maintainability and testability without requiring architectural changes.
+
+---
+
+## Verification of Previous Review Fixes
+
+The following issues from the 2026-01-20 review have been **verified as fixed**:
+
+| Issue | Status |
+|-------|--------|
+| Static buffer reuse in plugin_get_provided_types | ✅ Now uses caller-owned buffers |
+| strncpy null-termination risk | ✅ Replaced with snprintf |
+| SDK IPC buffering gap | ✅ Now uses sdk_ipc_recv with proper framing |
+| Duplicate log initialization | ✅ Removed |
+| Duplicate forward declaration | ✅ Removed |
 
 ---
 
 ## Changelog Entry
 
-> The following should be appended to `CHANGELOG.md` if this review marks completion of a unit of work:
-
 ```
-2026-01-20 18:59: - LLM semantic review completed. Identified 3 medium-severity issues: static buffer reuse in plugin metadata accessors, strncpy null-termination risk, SDK IPC buffering gap. 2 minor issues: duplicate log init, duplicate forward decl.
+2026-01-21 08:30: - LLM semantic review completed. Identified 1 high-severity (handle_json god function at 349 LOC), 2 medium (sdk_run complexity, nested loop depth), 3 minor (free vs mem_free, stale endpoint cleanup, db_error_message stub). Previous review fixes verified.
 ```

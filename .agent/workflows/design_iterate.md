@@ -59,7 +59,10 @@ A complete set of coherent design document(s) describing the project on every le
 
 - **Diagrams**: Use Mermaid for architecture diagrams, sequence diagrams, and state machines
 - **Tables**: Use tables for comparing alternatives and documenting decisions
-- **no code**: We do not code now, everything is described in plain english in their high level concepts. Small snippets of code are acceptable if absolutely nessesary.
+- **Links**: Always use relative paths from the document's location. Never use absolute `file://` URIs.
+  - ✅ Correct: `[server.c](../src/server.c)`, `[coding.md](standards/coding.md)`
+  - ❌ Wrong: `[server.c](file:///home/user/project/src/server.c)`
+- **No code**: We do not code now, everything is described in plain english in their high level concepts. Small snippets of code are acceptable if absolutely necessary.
 
 ## Iteration Flow
 

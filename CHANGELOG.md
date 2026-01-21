@@ -4,9 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## 2026-01-21
+
+### Reviews & Analysis
+- **08:30**: LLM semantic review completed. Identified 1 high-severity (handle_json god function at 349 LOC), 2 medium (sdk_run complexity, nested loop depth), 3 minor (free vs mem_free, stale endpoint cleanup, db_error_message stub). Previous review fixes verified.
+
+### Infrastructure
+- **08:28**: Fixed Makefile `analyze` target to run all analysis scripts (`structure.py`, `call_chains.py`, `data_flow.py`, `errors.py`, `hotspots.py`, `invariants.py`, `long_functions.py`, `memory_map.py`, `token_count.py`) using project venv.
+
+---
+
 ## 2026-01-20
 
 ### Reviews & Analysis
+
 - **18:59**: LLM semantic review completed. Identified 3 medium-severity issues: static buffer reuse in plugin metadata accessors, strncpy null-termination risk, SDK IPC buffering gap. 2 minor issues: duplicate log init, duplicate forward decl.
 
 ### Fixes

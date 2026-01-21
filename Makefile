@@ -78,10 +78,18 @@ clean:
 
 # --- Structure Analysis ---
 
+VENV_PYTHON = .venv/bin/python3
+ANALYSIS_SCRIPTS = structure.py call_chains.py data_flow.py errors.py \
+                   hotspots.py invariants.py long_functions.py memory_map.py token_count.py
+
 analyze: compile_commands
 	@echo ">> Running structure analysis..."
 	@mkdir -p scripts/out
-	@# Script invocation if needed
+	@for script in $(ANALYSIS_SCRIPTS); do \
+		echo "  -> Running $$script"; \
+		$(VENV_PYTHON) scripts/$$script || true; \
+	done
+	@echo ">> Analysis complete. Results in scripts/out/"
 	
 # --- Linting/Formatting ---
 
