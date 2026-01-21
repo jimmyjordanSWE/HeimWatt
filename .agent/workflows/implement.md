@@ -82,7 +82,7 @@ When implementing:
 
 12. **Update CHANGELOG.md**:
     - First, read the existing `CHANGELOG.md` to understand the format and recent entries
-    - Append a new entry under today's date with:
+    - **Prepend** a new entry under today's date (ensure reverse chronological order / newest first) with:
       - Time in HH:MM format
       - Brief description of what was implemented
       - Reference to the implementation plan if applicable
@@ -114,12 +114,6 @@ When implementing:
 ### Markdown Links
 
 **Always use relative paths from the document's location. Never use absolute `file://` URIs.**
-
-| Correct | Wrong |
-|---------|-------|
-| `[server.c](src/server.c)` | `[server.c](file:///home/user/project/src/server.c)` |
-| `[coding.md](docs/standards/coding.md)` | `[coding.md](file:///absolute/path/coding.md)` |
-| `[memory.c](../src/core/memory.c)` | `[memory.c](/home/user/project/src/core/memory.c)` |
 
 ### Code Style
 
@@ -161,7 +155,7 @@ If stuck:
 ## Example Usage
 
 ```
-User: /implement [impl_plan_2_ipc_dispatch.md](impl_plan_2_ipc_dispatch.md)
+User: /implement impl_file.md
 
 Agent:
 1. Runs `make analyze`

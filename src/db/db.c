@@ -170,17 +170,6 @@ void db_close(db_handle **db_ptr)
     *db_ptr = NULL;
 }
 
-const char *db_error_message(const db_handle *db)
-{
-    if (!db || db->count == 0) return "Database handle is NULL";
-    /* Return error from primary backend */
-    if (db->backends[0].ops->error_message)
-    {
-        return db->backends[0].ops->error_message(db->backends[0].ctx);
-    }
-    return "Unknown error";
-}
-
 /* ============================================================================
  * Tier 1: Semantic Time-Series
  * ============================================================================ */

@@ -227,22 +227,19 @@ static int duckdb_query_point_exists_tier1(void *ctx_void, semantic_type type, i
 /* Stubs for other ops if needed, or leave NULL */
 /* Tier2 not fully implemented here yet to save space/time, but schema exists. */
 
-static const db_backend_ops DUCK_OPS = {
-    .open = duckdb_backend_open,
-    .close = duckdb_backend_close,
-    .insert_tier1 = duckdb_insert_tier1,
-    .query_latest_tier1 = duckdb_query_latest_tier1,
-    .query_range_tier1 = duckdb_query_range_tier1,
-    .query_point_exists_tier1 = duckdb_query_point_exists_tier1,
-    /* Insert Tier 2 stub? */
-    .insert_tier2 = NULL,
-    .query_latest_tier2 = NULL,
-    .tick = NULL,
-    .set_interval = NULL,
-    .prune_tier1 = NULL,
-    .is_empty = NULL,
-    .maintenance = NULL,
-    .error_message = NULL /* Could implement to return duckdb_result_error */
-};
+static const db_backend_ops DUCK_OPS = {.open = duckdb_backend_open,
+                                        .close = duckdb_backend_close,
+                                        .insert_tier1 = duckdb_insert_tier1,
+                                        .query_latest_tier1 = duckdb_query_latest_tier1,
+                                        .query_range_tier1 = duckdb_query_range_tier1,
+                                        .query_point_exists_tier1 = duckdb_query_point_exists_tier1,
+                                        /* Insert Tier 2 stub? */
+                                        .insert_tier2 = NULL,
+                                        .query_latest_tier2 = NULL,
+                                        .tick = NULL,
+                                        .set_interval = NULL,
+                                        .prune_tier1 = NULL,
+                                        .is_empty = NULL,
+                                        .maintenance = NULL};
 
 const db_backend_ops *duckdb_backend_get_ops(void) { return &DUCK_OPS; }

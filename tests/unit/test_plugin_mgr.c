@@ -125,3 +125,42 @@ void test_plugin_mgr_get_nonexistent(void)
 
     plugin_mgr_destroy(&mgr);
 }
+
+void test_plugin_mgr_manifest_capabilities(void)
+{
+    // Create subdirectories
+    char in_dir[1024], plugin_dir[1024], manifest_path[1024];
+    snprintf(in_dir, sizeof(in_dir), "%s/in", test_dir);
+    mkdir(in_dir, 0755);
+    snprintf(plugin_dir, sizeof(plugin_dir), "%s/in/cap_test", test_dir);
+    mkdir(plugin_dir, 0755);
+
+    // Create manifest with capabilities
+    snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.json", plugin_dir);
+    FILE *f = fopen(manifest_path, "w");
+    TEST_ASSERT_NOT_NULL(f);
+    fprintf(f, "{\n"
+               "  \"id\": \"com.test.caps\",\n"
+               "  \"type\": \"in\",\n"
+               "  \"version\": \"1.0.0\",\n"
+               "  \"capabilities\": [\"actuate\", \"report\"]\n"
+               "}");
+    fclose(f);
+
+    plugin_mgr *mgr = NULL;
+    int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+
+    ret = plugin_mgr_scan(mgr);
+    TEST_ASSERT_TRUE(ret >= 0);
+
+    plugin_handle *h = plugin_mgr_get(mgr, "com.test.caps");
+    TEST_ASSERT_NOT_NULL(h);
+
+    // Check capabilities
+    TEST_ASSERT_TRUE(plugin_handle_has_capability(h, CAP_ACTUATE));
+    TEST_ASSERT_TRUE(plugin_handle_has_capability(h, CAP_REPORT));
+    TEST_ASSERT_FALSE(plugin_handle_has_capability(h, CAP_SENSE));
+
+    plugin_mgr_destroy(&mgr);
+}

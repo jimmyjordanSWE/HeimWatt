@@ -49,7 +49,7 @@ typedef struct db_backend_ops
     int (*prune_tier1)(void *ctx, semantic_type type, int64_t before_ts);
     int (*is_empty)(void *ctx);
     int (*maintenance)(void *ctx);
-    const char *(*error_message)(void *ctx);
+
 } db_backend_ops;
 
 /**

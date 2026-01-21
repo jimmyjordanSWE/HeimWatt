@@ -98,7 +98,7 @@ void db_close(db_handle **db);
  * @param[in] db Database handle.
  * @return Error message string, or NULL if no error.
  */
-const char *db_error_message(const db_handle *db);
+// DELETE: const char *db_error_message(const db_handle *db);
 
 /* ============================================================================
  * Tier 1: Semantic Time-Series Data

@@ -112,6 +112,7 @@ extern void test_plugin_mgr_init_null_params(void);
 extern void test_plugin_mgr_scan_empty_dir(void);
 extern void test_plugin_mgr_scan_with_manifest(void);
 extern void test_plugin_mgr_get_nonexistent(void);
+extern void test_plugin_mgr_manifest_capabilities(void);
 
 // --- test_http_server.c ---
 extern void test_http_server_create_destroy(void);
@@ -139,6 +140,11 @@ extern void test_lps_single_period(void);
 extern void test_lps_full_battery_start(void);
 extern void test_lps_storm_mode(void);
 extern void test_lps_performance_48h(void);
+
+// --- test_log_ring.c ---
+extern void test_ring_buffer_basics(void);
+extern void test_ring_buffer_overwrite(void);
+extern void test_ring_buffer_json(void);
 
 int main(void)
 {
@@ -198,6 +204,7 @@ int main(void)
     RUN_TEST(test_plugin_mgr_scan_empty_dir);
     RUN_TEST(test_plugin_mgr_scan_with_manifest);
     RUN_TEST(test_plugin_mgr_get_nonexistent);
+    RUN_TEST(test_plugin_mgr_manifest_capabilities);
     current_test_group = GROUP_DEFAULT;
 
     // ======== HTTP Server Tests ========
@@ -233,6 +240,11 @@ int main(void)
     RUN_TEST(test_duckdb_persistence);
     RUN_TEST(test_duckdb_query_range);
     current_test_group = GROUP_DEFAULT;
+
+    // ======== Log Ring Buffer Tests ========
+    RUN_TEST(test_ring_buffer_basics);
+    RUN_TEST(test_ring_buffer_overwrite);
+    RUN_TEST(test_ring_buffer_json);
 
     return UNITY_END();
 }

@@ -1,43 +1,8 @@
 [
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/memory.c",
-        "file": "src/core/memory.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_parse.c",
-        "file": "src/net/http_parse.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_client.c",
-        "file": "src/net/http_client.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/lifecycle.c",
-        "file": "src/sdk/lifecycle.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/config.c",
-        "file": "src/core/config.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/ipc.c",
-        "file": "src/sdk/ipc.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/http.c",
-        "file": "src/sdk/http.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/config.c",
-        "file": "src/sdk/config.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/tcp_server.c",
+        "file": "src/net/tcp_server.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
@@ -46,48 +11,8 @@
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/report.c",
-        "file": "src/sdk/report.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/tcp_server.c",
-        "file": "src/net/tcp_server.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/db -c src/db/csv_backend.c",
-        "file": "src/db/csv_backend.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/scheduler.c",
-        "file": "src/sdk/scheduler.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I plugins/in/smhi_weather -c plugins/in/smhi_weather/main.c",
-        "file": "plugins/in/smhi_weather/main.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/api.c",
-        "file": "src/sdk/api.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/state.c",
-        "file": "src/sdk/state.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/query.c",
-        "file": "src/sdk/query.c"
-    },
-    {
-        "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/semantic_types.c",
-        "file": "src/core/semantic_types.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/log_ring.c",
+        "file": "src/core/log_ring.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
@@ -96,8 +21,68 @@
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I plugins/out/avg_temp_10days -c plugins/out/avg_temp_10days/main.c",
-        "file": "plugins/out/avg_temp_10days/main.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_client.c",
+        "file": "src/net/http_client.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/state.c",
+        "file": "src/sdk/state.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/semantic_types.c",
+        "file": "src/core/semantic_types.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/db -c src/db/csv_backend.c",
+        "file": "src/db/csv_backend.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/ipc_handlers.c",
+        "file": "src/core/ipc_handlers.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/scheduler.c",
+        "file": "src/sdk/scheduler.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/log_structured.c",
+        "file": "src/core/log_structured.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src -c src/server.c",
+        "file": "src/server.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/query.c",
+        "file": "src/sdk/query.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/lifecycle.c",
+        "file": "src/sdk/lifecycle.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/config.c",
+        "file": "src/sdk/config.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/http.c",
+        "file": "src/sdk/http.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/report.c",
+        "file": "src/sdk/report.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
@@ -111,8 +96,18 @@
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/json.c",
-        "file": "src/net/json.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/memory.c",
+        "file": "src/core/memory.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I plugins/in/smhi_weather -c plugins/in/smhi_weather/main.c",
+        "file": "plugins/in/smhi_weather/main.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/core -c src/core/config.c",
+        "file": "src/core/config.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
@@ -121,8 +116,28 @@
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_server.c",
-        "file": "src/net/http_server.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/json.c",
+        "file": "src/net/json.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_parse.c",
+        "file": "src/net/http_parse.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I plugins/out/avg_temp_10days -c plugins/out/avg_temp_10days/main.c",
+        "file": "plugins/out/avg_temp_10days/main.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/db -c src/db/db.c",
+        "file": "src/db/db.c"
+    },
+    {
+        "directory": "/home/jimmy/HeimWatt",
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/ipc.c",
+        "file": "src/sdk/ipc.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
@@ -131,12 +146,12 @@
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src -c src/server.c",
-        "file": "src/server.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/net -c src/net/http_server.c",
+        "file": "src/net/http_server.c"
     },
     {
         "directory": "/home/jimmy/HeimWatt",
-        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/db -c src/db/db.c",
-        "file": "src/db/db.c"
+        "command": "gcc -std=c99 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -Wall -Wextra -pthread -I /home/jimmy/HeimWatt/libs -I /home/jimmy/HeimWatt/include -I /home/jimmy/HeimWatt/src -I /home/jimmy/HeimWatt -I /home/jimmy/HeimWatt/libs/duckdb -I src/sdk -c src/sdk/api.c",
+        "file": "src/sdk/api.c"
     }
 ]

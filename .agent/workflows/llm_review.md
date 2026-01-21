@@ -37,6 +37,3 @@ If the work embodies sound engineering—proper separation of concerns, earned c
       - ✅ Correct: `[server.c](src/server.c#L419)`, `[coding.md](docs/standards/coding.md#L20)`
       - ❌ Wrong: `[server.c](file:///home/user/project/src/server.c#L419)`
     - **Tables**: Use a consistent table format for findings with Field/Value columns.
-5. **Changelog**: If this review marks the completion of a significant unit of work, update (or verify) `CHANGELOG.md` in the root.
-    - **Format**: Terse changes, time/date notes. (e.g., `YYYY-MM-DD hh:mm: - API endpoints added`, `- Fixed protocol mismatch`).
-    - **Content**: Focus on architectural and surface-level changes.

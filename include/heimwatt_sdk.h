@@ -51,6 +51,19 @@ void sdk_destroy(plugin_ctx **ctx_ptr);
  */
 int sdk_get_config(plugin_ctx *ctx, const char *key, char **value);
 
+/**
+ * Get credential value (managed by Core).
+ * @param key Credential key (e.g. "api_key", "access_token")
+ * @param value Output pointer. Caller must free with sdk_credential_destroy.
+ * @return 0 if found, -1 if missing.
+ */
+int sdk_credential_get(plugin_ctx *ctx, const char *key, char **value);
+
+/**
+ * Zero out and free credential memory.
+ */
+void sdk_credential_destroy(char **value);
+
 // ============================================================================
 // Scheduling
 // ============================================================================
@@ -132,6 +145,14 @@ int sdk_report_value(plugin_ctx *ctx, const char *type_name, double value, int64
 /** Shorthand for price types with currency. */
 int sdk_report_price(plugin_ctx *ctx, const char *type_name, double value, const char *currency,
                      int64_t ts);
+
+/**
+ * Control a device (requires 'actuate' capability).
+ * @param device_id Device ID (e.g. from config)
+ * @param value Setpoint value
+ * @return 0 on success, -1 on error/denied
+ */
+int sdk_device_setpoint(plugin_ctx *ctx, const char *device_id, double value);
 
 /** Report raw/extension data. */
 int sdk_report_raw(plugin_ctx *ctx, const char *key, int64_t timestamp, const char *json_fmt, ...);

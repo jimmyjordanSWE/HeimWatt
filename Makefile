@@ -29,8 +29,9 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Sources
-SRC = src/main.c src/server.c src/core/ipc.c src/core/semantic_types.c \
-      src/core/plugin_mgr.c src/core/config.c src/core/memory.c src/db/db.c src/db/csv_backend.c \
+SRC = src/main.c src/server.c src/core/ipc.c src/core/ipc_handlers.c src/core/semantic_types.c \
+      src/core/plugin_mgr.c src/core/config.c src/core/memory.c src/core/log_ring.c src/core/log_structured.c \
+      src/db/db.c src/db/csv_backend.c \
       src/db/duckdb_backend.c \
       src/net/tcp_server.c src/net/http_parse.c src/net/http_server.c
 # Convert src/%.c to build/obj/src/%.o
@@ -124,7 +125,8 @@ UNIT_TESTS = tests/unit/test_http_parse.c \
              tests/unit/test_plugin_mgr.c \
              tests/unit/test_http_server.c \
              tests/unit/test_duckdb_backend.c \
-             tests/unit/test_lps.c
+             tests/unit/test_lps.c \
+             tests/unit/test_log_ring.c
 
 TEST_RUNNER_SRC = tests/test_runner.c
 
@@ -141,6 +143,8 @@ TEST_DEPS_OBJ = $(OBJ_DIR)/src/net/http_parse.o \
                 $(OBJ_DIR)/src/core/plugin_mgr.o \
                 $(OBJ_DIR)/src/net/http_server.o \
                 $(OBJ_DIR)/src/net/tcp_server.o \
+                $(OBJ_DIR)/src/core/log_ring.o \
+                $(OBJ_DIR)/src/core/log_structured.o \
                 $(OBJ_DIR)/plugins/out/energy_strategy/lps/lps.o
 
 # Build and run unit tests

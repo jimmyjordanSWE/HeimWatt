@@ -414,12 +414,6 @@ static int csv_is_empty(void *ctx_ptr)
     return !has_data;
 }
 
-static const char *csv_error_message(void *ctx_ptr)
-{
-    (void) ctx_ptr;
-    return "CSV backend operation failed";
-}
-
 /* ============================================================================
  * Ops Table Export
  * ============================================================================ */
@@ -438,7 +432,6 @@ static const db_backend_ops CSV_OPS = {
     .prune_tier1 = NULL, /* Not implemented */
     .is_empty = csv_is_empty,
     .maintenance = NULL, /* Not implemented */
-    .error_message = csv_error_message,
 };
 
 const db_backend_ops *csv_backend_get_ops(void) { return &CSV_OPS; }

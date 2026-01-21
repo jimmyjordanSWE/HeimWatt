@@ -17,51 +17,14 @@
 #include "core/ipc.h"
 #include "core/plugin_mgr.h"
 #include "db.h"
+#include "ipc_handlers.h"
 #include "libs/cJSON.h"
 #include "log.h"
+#include "log_ring.h"
+#include "log_structured.h"
 #include "memory.h"
 #include "net/http_server.h"
-
-enum
-{
-    MAX_PLUGIN_CONNECTIONS = 32,
-    REQUEST_ID_LEN = 37
-};
-
-struct heimwatt_ctx
-{
-    db_handle *db;
-    ipc_server *ipc;
-    plugin_mgr *plugins;
-    atomic_int running;
-
-    // Connections managed here for Alpha
-    ipc_conn *conns[MAX_PLUGIN_CONNECTIONS];
-    int conn_count;
-
-    // Logging
-    FILE *log_file;
-
-    // HTTP Server
-    http_server *http;
-    pthread_t http_thread;
-
-    // Endpoint Registry
-    struct
-    {
-        char path[128];
-        char plugin_id[64];
-        char method[16];
-    } registry[32];
-    int registry_count;
-
-    // Connection Lock (Protect conns array and registry)
-    pthread_mutex_t conn_lock;
-    // Global Config
-    double lat;
-    double lon;
-    char area[16];
-};
+#include "server_internal.h"
 
 // Global for signal handling if needed, but we pass ctx via args
 static volatile int g_shutdown = 0;
@@ -219,6 +182,21 @@ static int handle_api_request(heimwatt_ctx *ctx, const http_request *req, http_r
             }
         }
     }
+    else if (strcmp(req->path, "/api/logs") == 0)
+    {
+        char *json = log_ring_to_json(100);
+        if (json)
+        {
+            http_response_set_json(resp, json);
+            free(json);
+        }
+        else
+        {
+            http_response_set_status(resp, 500);
+            http_response_set_json(resp, "{\"error\": \"Internal Error\"}");
+        }
+        return 0;
+    }
 
     return -1;  // Not an API request we handled
 }
@@ -307,6 +285,41 @@ static void *http_thread_func(void *arg)
     return NULL;
 }
 
+static void log_ring_callback(log_Event *ev)
+{
+    log_entry entry;
+    // Use wall clock time
+    entry.timestamp = (int64_t) time(NULL);
+    entry.level = ev->level;
+    entry.category[0] = '\0';
+    entry.event[0] = '\0';
+    entry.message[0] = '\0';
+
+    // Format message
+    vsnprintf(entry.message, sizeof(entry.message), ev->fmt, ev->ap);
+
+    // Try to parse [CATEGORY]
+    if (entry.message[0] == '[')
+    {
+        char *end = strchr(entry.message, ']');
+        if (end)
+        {
+            size_t len = end - entry.message - 1;
+            if (len < sizeof(entry.category))
+            {
+                memcpy(entry.category, entry.message + 1, len);
+                entry.category[len] = '\0';
+            }
+        }
+    }
+    else
+    {
+        strncpy(entry.category, "general", sizeof(entry.category) - 1);
+    }
+
+    log_ring_push(&entry);
+}
+
 int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
 {
     int ret = 0;
@@ -324,6 +337,10 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path)
 
     // Initialize logging
     log_set_level(LOG_INFO);
+
+    // Initialize Ring Buffer
+    log_ring_init(100);
+    log_add_callback(log_ring_callback, NULL, LOG_TRACE);
 
     // Create log file
     char log_path[256];
@@ -414,356 +431,6 @@ cleanup:
     plugin_mgr_destroy(&ctx->plugins);
     db_close(&ctx->db);
     return ret;
-}
-
-static void handle_json(heimwatt_ctx *ctx, ipc_conn *conn, cJSON *json)
-{
-    if (!json) return;
-
-    cJSON *cmd = cJSON_GetObjectItem(json, "cmd");
-    if (!cmd || !cmd->valuestring)
-    {
-        return;
-    }
-
-    const char *plugin_id = ipc_conn_plugin_id(conn);
-    const char *from = plugin_id ? plugin_id : "unknown";
-
-    log_debug("[IPC] Received cmd='%s' from='%s'", cmd->valuestring, from);
-
-    if (strcmp(cmd->valuestring, "report") == 0)
-    {
-        // {"cmd":"report", "type":"...", "val":123, "ts": ...}
-        cJSON *type = cJSON_GetObjectItem(json, "type");
-        cJSON *val = cJSON_GetObjectItem(json, "val");
-        cJSON *ts = cJSON_GetObjectItem(json, "ts");
-
-        if (type && val && ts)
-        {
-            semantic_type st = semantic_from_string(type->valuestring);
-            int64_t timestamp = (int64_t) ts->valuedouble;
-
-            int ret = db_insert_tier1(ctx->db, st, timestamp, val->valuedouble, NULL, from);
-            if (ret == -EEXIST)
-            {
-                log_debug("[DATA] Skip (Cached): %s @ %ld", type->valuestring, timestamp);
-                // Still update last run? Yes, it means plugin tried.
-                plugin_mgr_set_last_run(ctx->plugins, from, (time_t) time(NULL));
-                return;
-            }
-
-            if (ret < 0)
-            {
-                log_error("[DATA] Failed to store %s: %s", type->valuestring,
-                          db_error_message(ctx->db) ? db_error_message(ctx->db) : strerror(-ret));
-                return;
-            }
-
-            // Success
-            plugin_mgr_set_last_run(ctx->plugins, from, (time_t) time(NULL));
-
-            time_t t = (time_t) timestamp;
-            struct tm tm_info;
-            (void) localtime_r(&t, &tm_info);
-            char time_buf[64];
-            (void) strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_info);
-
-            log_info("[DATA] Stored: %s = %.2f @ %s (from: %s)", type->valuestring,
-                     val->valuedouble, time_buf, from);
-        }
-    }
-    else if (strcmp(cmd->valuestring, "config") == 0)
-    {
-        // {"cmd":"config", "key":"..."}
-        cJSON *key = cJSON_GetObjectItem(json, "key");
-        if (key && key->valuestring)
-        {
-            char resp[2048];
-            const char *k = key->valuestring;
-
-            const char *src = plugin_mgr_get_config(ctx->plugins, from, k);
-            if (!src) src = "";  // Or send error/empty
-
-            // Perform Variable Substitution
-            char final_val[1024];
-            char *dst = final_val;
-            char *end = final_val + sizeof(final_val) - 1;
-
-            while (*src && dst < end)
-            {
-                if (strncmp(src, "{lat}", 5) == 0)
-                {
-                    dst += snprintf(dst, end - dst, "%.4f", ctx->lat);
-                    src += 5;
-                }
-                else if (strncmp(src, "{lon}", 5) == 0)
-                {
-                    dst += snprintf(dst, end - dst, "%.4f", ctx->lon);
-                    src += 5;
-                }
-                else if (strncmp(src, "{area}", 6) == 0)
-                {
-                    dst += snprintf(dst, end - dst, "%s", ctx->area);
-                    src += 6;
-                }
-                else
-                {
-                    *dst++ = *src++;
-                }
-            }
-            *dst = '\0';
-
-            log_debug("[IPC] Config request: key='%s' -> val='%s'", k, final_val);
-
-            (void) snprintf(resp, sizeof(resp), "{\"val\":\"%s\"}\n", final_val);
-            ipc_conn_send(conn, resp, strlen(resp));
-        }
-    }
-    else if (strcmp(cmd->valuestring, "lookup") == 0)
-    {
-        cJSON *name = cJSON_GetObjectItem(json, "name");
-        if (name && name->valuestring)
-        {
-            semantic_type id = semantic_from_string(name->valuestring);
-            char resp[256];
-            (void) snprintf(resp, sizeof(resp), "{\"id\":%d}\n", (int) id);
-            ipc_conn_send(conn, resp, strlen(resp));
-            log_debug("[IPC] Type lookup: '%s' -> %d", name->valuestring, (int) id);
-        }
-    }
-    else if (strcmp(cmd->valuestring, "check_data") == 0)
-    {
-        // {"cmd":"check_data", "ts":..., "sem":...}
-        cJSON *ts_json = cJSON_GetObjectItem(json, "ts");
-        cJSON *sem_json = cJSON_GetObjectItem(json, "sem");
-
-        int exists = 0;
-        if (ts_json)
-        {
-            int64_t ts = (int64_t) ts_json->valuedouble;
-            semantic_type sem =
-                sem_json ? (semantic_type) sem_json->valueint : SEM_ATMOSPHERE_TEMPERATURE;
-            exists = db_query_point_exists_tier1(ctx->db, sem, ts) > 0;
-        }
-
-        char resp[64];
-        (void) snprintf(resp, sizeof(resp), "{\"exists\":%s}\n", exists ? "true" : "false");
-        ipc_conn_send(conn, resp, strlen(resp));
-        log_debug("[IPC] check_data: exists=%d", exists);
-    }
-    else if (strcmp(cmd->valuestring, "query_range") == 0)
-    {
-        cJSON *sem = cJSON_GetObjectItem(json, "sem");
-        cJSON *from_json = cJSON_GetObjectItem(json, "from");
-        cJSON *to_json = cJSON_GetObjectItem(json, "to");
-
-        if (sem && from_json && to_json)
-        {
-            semantic_type type = (semantic_type) sem->valueint;
-            int64_t from_ts = (int64_t) from_json->valuedouble;
-            int64_t to_ts = (int64_t) to_json->valuedouble;
-
-            double *values = NULL;
-            int64_t *ts_arr = NULL;
-            size_t count = 0;
-
-            int ret = db_query_range_tier1(ctx->db, type, from_ts, to_ts, &values, &ts_arr, &count);
-            if (ret == 0)
-            {
-                cJSON *resp_json = cJSON_CreateObject();
-                cJSON_AddNumberToObject(resp_json, "count", (double) count);
-
-                cJSON *vals_arr = cJSON_AddArrayToObject(resp_json, "values");
-                cJSON *tss_arr = cJSON_AddArrayToObject(resp_json, "ts");
-
-                for (size_t i = 0; i < count; i++)
-                {
-                    cJSON_AddItemToArray(vals_arr, cJSON_CreateNumber(values[i]));
-                    cJSON_AddItemToArray(tss_arr, cJSON_CreateNumber((double) ts_arr[i]));
-                }
-
-                char *resp_str = cJSON_PrintUnformatted(resp_json);
-                if (resp_str)
-                {
-                    ipc_conn_send(conn, resp_str, strlen(resp_str));
-                    ipc_conn_send(conn, "\n", 1);
-                    mem_free(resp_str);
-                }
-                cJSON_Delete(resp_json);
-
-                db_free(values);
-                db_free(ts_arr);
-                log_debug("[IPC] Query range: sem=%d from=%ld to=%ld -> count=%zu", (int) type,
-                          from_ts, to_ts, count);
-            }
-            else
-            {
-                char err_resp[] = "{\"count\":0, \"error\":\"DB Error\"}\n";
-                ipc_conn_send(conn, err_resp, strlen(err_resp));
-                log_error("[IPC] Query range failed: %d", ret);
-            }
-        }
-    }
-    else if (strcmp(cmd->valuestring, "query_latest") == 0)
-    {
-        // {"cmd":"query_latest", "sem":...}
-        cJSON *sem = cJSON_GetObjectItem(json, "sem");
-        if (sem)
-        {
-            semantic_type type = (semantic_type) sem->valueint;
-            double val = 0;
-            int64_t ts = 0;
-
-            int ret = db_query_latest_tier1(ctx->db, type, &val, &ts);
-            if (ret == 0)
-            {
-                // Found
-                char resp[128];
-                snprintf(resp, sizeof(resp), "{\"val\":%.6f, \"ts\":%ld}\n", val, ts);
-                ipc_conn_send(conn, resp, strlen(resp));
-                log_debug("[IPC] Query latest: sem=%d -> %.2f @ %ld", (int) type, val, ts);
-            }
-            else
-            {
-                // Not found or error (return empty object or error?)
-                const char *empty = "{}\n";
-                ipc_conn_send(conn, empty, strlen(empty));
-                log_debug("[IPC] Query latest: sem=%d -> Not found", (int) type);
-            }
-        }
-    }
-    else if (strcmp(cmd->valuestring, "register_endpoint") == 0)
-    {
-        cJSON *method = cJSON_GetObjectItem(json, "method");
-        cJSON *path = cJSON_GetObjectItem(json, "path");
-
-        pthread_mutex_lock(&ctx->conn_lock);
-        if (method && path && plugin_id && ctx->registry_count < 32)
-        {
-            int idx = ctx->registry_count++;
-            snprintf(ctx->registry[idx].path, sizeof(ctx->registry[0].path), "%s",
-                     path->valuestring);
-            snprintf(ctx->registry[idx].method, sizeof(ctx->registry[0].method), "%s",
-                     method->valuestring);
-            snprintf(ctx->registry[idx].plugin_id, sizeof(ctx->registry[0].plugin_id), "%s",
-                     plugin_id);
-            log_info("[IPC] Registered endpoint %s %s -> %s", method->valuestring,
-                     path->valuestring, plugin_id);
-        }
-        pthread_mutex_unlock(&ctx->conn_lock);
-    }
-    else if (strcmp(cmd->valuestring, "http_response") == 0)
-    {
-        // Async response from plugin - complete the HTTP request
-        cJSON *request_id_json = cJSON_GetObjectItem(json, "request_id");
-        cJSON *status = cJSON_GetObjectItem(json, "status");
-        cJSON *body = cJSON_GetObjectItem(json, "body");
-
-        if (request_id_json && request_id_json->valuestring)
-        {
-            http_response resp;
-            http_response_init(&resp);
-
-            if (status) resp.status_code = status->valueint;
-            if (body && body->valuestring)
-            {
-                http_response_set_json(&resp, body->valuestring);
-            }
-
-            int ret = http_server_complete_request(ctx->http, request_id_json->valuestring, &resp);
-            if (ret < 0)
-            {
-                log_warn("[IPC] http_response: request_id not found: %.8s...",
-                         request_id_json->valuestring);
-            }
-            else
-            {
-                log_debug("[IPC] http_response completed: %.8s...", request_id_json->valuestring);
-            }
-
-            http_response_destroy(&resp);
-        }
-    }
-    else if (strcmp(cmd->valuestring, "request_data") == 0)
-    {
-        // Calculator requesting on-demand data fetch
-        cJSON *types = cJSON_GetObjectItem(json, "semantic_types");
-        if (types && cJSON_IsArray(types))
-        {
-            log_info("[IPC] Data request from %s for %d types", from, cJSON_GetArraySize(types));
-
-            cJSON *type_item = NULL;
-            cJSON_ArrayForEach(type_item, types)
-            {
-                if (cJSON_IsString(type_item))
-                {
-                    const char *semantic_type = type_item->valuestring;
-                    const char *providers[32];
-                    int provider_count = 0;
-                    find_providers_for_type(ctx->plugins, semantic_type, providers, 32,
-                                            &provider_count);
-
-                    if (provider_count == 0)
-                    {
-                        log_warn("[IPC] No provider for %s (requested by %s)", semantic_type, from);
-                    }
-                    else
-                    {
-                        log_info("[IPC] Would trigger %s to fetch %s", providers[0], semantic_type);
-                        // Note: Full IPC routing to send fetch_now to specific plugin
-                        // requires connection map (plugin_id -> ipc_conn)
-                        // This infrastructure works; production would need connection tracking
-                    }
-                }
-            }
-
-            char resp[] = "{\"status\":\"acknowledged\"}\n";
-            ipc_conn_send(conn, resp, strlen(resp));
-        }
-    }
-    else if (strcmp(cmd->valuestring, "log") == 0)
-    {
-        // Echo log from plugin
-        cJSON *msg = cJSON_GetObjectItem(json, "msg");
-        cJSON *level = cJSON_GetObjectItem(json, "level");
-        if (msg && msg->valuestring)
-        {
-            int lvl = level ? level->valueint : LOG_INFO;
-            // Map SDK levels to log.c levels
-            switch (lvl)
-            {
-                case 0:
-                    log_debug("[SDK:%s] %s", from, msg->valuestring);
-                    break;
-                case 1:
-                    log_info("[SDK:%s] %s", from, msg->valuestring);
-                    break;
-                case 2:
-                    log_warn("[SDK:%s] %s", from, msg->valuestring);
-                    break;
-                case 3:
-                    log_error("[SDK:%s] %s", from, msg->valuestring);
-                    break;
-                default:
-                    log_info("[SDK:%s] %s", from, msg->valuestring);
-                    break;
-            }
-        }
-    }
-    else if (strcmp(cmd->valuestring, "hello") == 0)
-    {
-        // {"cmd":"hello", "id":"..."}
-        cJSON *id = cJSON_GetObjectItem(json, "id");
-        if (id && id->valuestring)
-        {
-            ipc_conn_set_plugin_id(conn, id->valuestring);
-            log_info("[PLUGIN] Connected: '%s'", id->valuestring);
-        }
-    }
-    else
-    {
-        log_warn("[IPC] Unknown command: '%s' from '%s'", cmd->valuestring, from);
-    }
 }
 
 void heimwatt_run(heimwatt_ctx *ctx) { heimwatt_run_with_shutdown_flag(ctx, NULL); }
@@ -879,7 +546,7 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                         cJSON *json = cJSON_ParseWithOpts(p, &end, 0);
                         if (json)
                         {
-                            handle_json(ctx, ctx->conns[i], json);
+                            handle_ipc_command(ctx, ctx->conns[i], json);
                             cJSON_Delete(json);
                         }
                         else
@@ -899,6 +566,18 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
                 log_info("[PLUGIN] Disconnected: '%s'", pid ? pid : "unknown");
 
                 pthread_mutex_lock(&ctx->conn_lock);
+                // Clean up registered endpoints for this plugin
+                if (pid)
+                {
+                    for (int j = 0; j < ctx->registry_count; j++)
+                    {
+                        if (strcmp(ctx->registry[j].plugin_id, pid) == 0)
+                        {
+                            ctx->registry[j] = ctx->registry[--ctx->registry_count];
+                            j--;  // Recheck swapped entry
+                        }
+                    }
+                }
                 ipc_conn_destroy(&ctx->conns[i]);
                 // Shift
                 ctx->conns[i] = ctx->conns[ctx->conn_count - 1];

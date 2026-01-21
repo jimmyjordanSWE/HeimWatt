@@ -24,6 +24,19 @@ typedef enum
 } plugin_type;
 
 /**
+ * Plugin Capabilities (flags).
+ */
+typedef enum
+{
+    CAP_NONE = 0,
+    CAP_REPORT = 1 << 0,    /**< Push semantic data */
+    CAP_QUERY = 1 << 1,     /**< Pull semantic data */
+    CAP_ACTUATE = 1 << 2,   /**< Control devices */
+    CAP_CONSTRAIN = 1 << 3, /**< Provide optimization constraints */
+    CAP_SENSE = 1 << 4      /**< Real-time sensor stream */
+} plugin_capability;
+
+/**
  * Plugin states.
  */
 typedef enum
@@ -145,6 +158,11 @@ plugin_state plugin_handle_state(const plugin_handle *h);
  * Get plugin type.
  */
 plugin_type plugin_handle_type(const plugin_handle *h);
+
+/**
+ * Check if plugin has a specific capability.
+ */
+bool plugin_handle_has_capability(const plugin_handle *h, plugin_capability cap);
 
 /**
  * Get total number of plugins.

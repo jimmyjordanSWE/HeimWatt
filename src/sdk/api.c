@@ -106,3 +106,73 @@ int sdk_require_semantic(plugin_ctx *ctx, semantic_type type)
     (void) type;
     return 0;
 }
+
+int sdk_credential_get(plugin_ctx *ctx, const char *key, char **value)
+{
+    if (!ctx || !key || !value) return -1;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "{\"cmd\":\"credential_get\", \"key\":\"%s\"}", key);
+
+    if (sdk_ipc_send(ctx, buf) < 0) return -1;
+
+    char resp[1024];
+    if (sdk_ipc_recv(ctx, resp, sizeof(resp)) < 0) return -1;
+
+    // {"value":"..."}
+    char *p = strstr(resp, "\"value\":\"");
+    if (p)
+    {
+        p += 9;
+        char *end = strchr(p, '"');
+        if (end)
+        {
+            size_t len = end - p;
+            char *raw_val = mem_alloc(len + 1);
+            if (!raw_val) return -1;
+            memcpy(raw_val, p, len);
+            raw_val[len] = '\0';
+            *value = raw_val;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+void sdk_credential_destroy(char **value)
+{
+    if (value && *value)
+    {
+        // Zero out memory for security because it's a credential
+        memset(*value, 0, strlen(*value));
+        mem_free(*value);
+        *value = NULL;
+    }
+}
+
+int sdk_device_setpoint(plugin_ctx *ctx, const char *device_id, double value)
+{
+    if (!ctx || !device_id) return -1;
+
+    char buf[512];
+    snprintf(buf, sizeof(buf), "{\"cmd\":\"device_setpoint\", \"id\":\"%s\", \"value\":%.6f}",
+             device_id, value);
+
+    if (sdk_ipc_send(ctx, buf) < 0) return -1;
+
+    // Wait for ACK
+    char resp[256];
+    if (sdk_ipc_recv(ctx, resp, sizeof(resp)) < 0) return -1;
+
+    // Check for "status":"ok"
+    if (strstr(resp, "\"status\":\"ok\"")) return 0;
+
+    // Check for error
+    if (strstr(resp, "\"error\""))
+    {
+        // Log error is hard here since we don't parse it fully, but return -1
+        return -1;
+    }
+
+    return 0;
+}

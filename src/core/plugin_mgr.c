@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,9 +43,12 @@ struct plugin_handle
     time_t last_run;
     time_t next_run;  // Next aligned run time
     char resource[MAX_ID_LEN];
-    cJSON *config_json;    // Store entire config object
-    cJSON *provides_json;  // Store provides object for dynamic queries
-    cJSON *requires_json;  // Store requires list for dependency checking
+    cJSON *config_json;       // Store entire config object
+    cJSON *provides_json;     // Store provides object for dynamic queries
+    cJSON *requires_json;     // Store requires list for dependency checking
+    cJSON *devices_json;      // Store devices definition
+    cJSON *credentials_json;  // Store credentials definition
+    uint32_t capabilities;    // Bitmask of plugin_capability
 };
 
 struct plugin_mgr
@@ -200,6 +204,52 @@ static int load_manifest(const char *manifest_path, plugin_handle *h)
         h->requires_json = cJSON_Duplicate(requires_item, 1);
     }
 
+    // Extract "devices"
+    cJSON *devices = cJSON_GetObjectItem(json, "devices");
+    if (devices)
+    {
+        h->devices_json = cJSON_Duplicate(devices, 1);
+    }
+
+    // Extract "credentials"
+    cJSON *creds = cJSON_GetObjectItem(json, "credentials");
+    if (creds)
+    {
+        h->credentials_json = cJSON_Duplicate(creds, 1);
+    }
+
+    // Extract "capabilities"
+    cJSON *caps = cJSON_GetObjectItem(json, "capabilities");
+    h->capabilities = CAP_NONE;
+    if (caps && cJSON_IsArray(caps))
+    {
+        cJSON *cap = NULL;
+        cJSON_ArrayForEach(cap, caps)
+        {
+            if (cJSON_IsString(cap) && cap->valuestring)
+            {
+                if (strcmp(cap->valuestring, "report") == 0)
+                    h->capabilities |= CAP_REPORT;
+                else if (strcmp(cap->valuestring, "query") == 0)
+                    h->capabilities |= CAP_QUERY;
+                else if (strcmp(cap->valuestring, "actuate") == 0)
+                    h->capabilities |= CAP_ACTUATE;
+                else if (strcmp(cap->valuestring, "constrain") == 0)
+                    h->capabilities |= CAP_CONSTRAIN;
+                else if (strcmp(cap->valuestring, "sense") == 0)
+                    h->capabilities |= CAP_SENSE;
+            }
+        }
+    }
+    else
+    {
+        // Default: If no caps specified, assume legacy "report" + "query"?
+        // Or strictly NONE?
+        // For safety, let's default to CAP_REPORT if type is IN, generic default NONE
+        // But plan said default to NONE. Let's stick to NONE.
+        h->capabilities = CAP_NONE;
+    }
+
     cJSON_Delete(json);
     return 0;
 }
@@ -243,6 +293,16 @@ void plugin_mgr_destroy(plugin_mgr **mgr)
         {
             cJSON_Delete((*mgr)->plugins[i].requires_json);
             (*mgr)->plugins[i].requires_json = NULL;
+        }
+        if ((*mgr)->plugins[i].devices_json)
+        {
+            cJSON_Delete((*mgr)->plugins[i].devices_json);
+            (*mgr)->plugins[i].devices_json = NULL;
+        }
+        if ((*mgr)->plugins[i].credentials_json)
+        {
+            cJSON_Delete((*mgr)->plugins[i].credentials_json);
+            (*mgr)->plugins[i].credentials_json = NULL;
         }
     }
 
@@ -479,6 +539,12 @@ plugin_state plugin_handle_state(const plugin_handle *h)
 }
 
 plugin_type plugin_handle_type(const plugin_handle *h) { return h ? h->type : PLUGIN_TYPE_IN; }
+
+bool plugin_handle_has_capability(const plugin_handle *h, plugin_capability cap)
+{
+    if (!h) return false;
+    return (h->capabilities & cap) != 0;
+}
 
 const char *plugin_handle_id(const plugin_handle *h) { return h ? h->id : NULL; }
 
