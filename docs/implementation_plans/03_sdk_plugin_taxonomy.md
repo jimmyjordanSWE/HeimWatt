@@ -1,171 +1,280 @@
 # Design Study: SDK Plugin Taxonomy
 
-> **Status**: Draft  
-> **Date**: 2026-01-20
+> **Status**: In Review  
+> **Created**: 2026-01-20  
+> **Updated**: 2026-01-21
 
-## The Question
+## Executive Summary
 
-Is `IN`/`OUT` the correct plugin abstraction? What about sensors, actuators, constraints, API wrappers?
-
----
-
-## Current Model
-
-```
-IN  Plugin  → Reports data TO core (weather, prices, meter readings)
-OUT Plugin  → Queries data FROM core, computes, optionally controls devices
-```
-
-**Problem**: This binary split is too coarse. A heat pump plugin:
-- **Reads** schedule from solver (OUT behavior)
-- **Reports** actual power consumption (IN behavior)  
-- **Controls** hardware via API (Actuator)
+This document defines the plugin model for HeimWatt. **Capability-based architecture** Plugins declare what they can do, what devices they provide, and what credentials they need. All management happens via WebUI.
 
 ---
 
-## Proposed Taxonomy
+## Plugin Taxonomy
 
-### Option A: Capability-Based (Recommended)
+### Capabilities
 
-Plugins declare capabilities, not types:
-
-```json
-{
-  "id": "com.heimwatt.melcloud",
-  "capabilities": ["report", "query", "actuate"],
-  "provides": ["hvac.power.actual", "hvac.cop.actual"],
-  "consumes": ["schedule.heat_pump.power"],
-  "controls": ["melcloud:device_id"]
-}
-```
+Plugins declare capabilities in their manifest:
 
 | Capability | Description | Example |
 |------------|-------------|---------|
 | `report` | Push semantic data to Core | Weather plugin |
 | `query` | Pull semantic data from Core | Solver |
-| `actuate` | Control external hardware | Heat pump wrapper |
+| `actuate` | Control external devices | Heat pump wrapper |
 | `constrain` | Provide optimization constraints | Battery limits |
 | `sense` | Real-time sensor stream | Temperature probe |
 
-**Pros**: 
-- Plugins can have multiple roles
-- Core validates capability vs. behavior
-- Clear audit trail ("who can actuate?")
+Plugins can have multiple capabilities. Core enforces capability checks — a plugin without `actuate` cannot call device control APIs.
 
-### Option B: Role Hierarchy
+### Device-Centric Model
 
+Plugins declare **devices**, not services. The user cares about their battery, not MELCloud:
+
+```json
+{
+  "id": "com.heimwatt.melcloud",
+  "name": "MELCloud Integration",
+  "capabilities": ["report", "query", "actuate"],
+  "devices": [
+    {
+      "type": "heat_pump",
+      "name": "Heat Pump",
+      "provides": ["hvac.power.actual", "hvac.cop.actual"],
+      "consumes": ["schedule.heat_pump.power"]
+    },
+    {
+      "type": "battery",
+      "name": "Home Battery",
+      "provides": ["storage.soc", "storage.power"],
+      "consumes": ["schedule.battery.power"]
+    }
+  ]
+}
 ```
-Plugin (base)
-├── DataProvider    → report only
-├── DataConsumer    → query only  
-├── Actuator        → query + control
-├── Solver          → query + report (schedules)
-└── Hybrid          → all capabilities
-```
 
-**Pros**: Simpler mental model  
-**Cons**: Still forces categorization
+**WebUI shows devices, not plugins**:
+```
+My Devices
+├── 🔋 Home Battery
+│   └── via MELCloud ✓ Connected
+├── 🌡️ Heat Pump
+│   └── via MELCloud ✓ Connected
+└── ⚡ Electricity Price
+    └── via Tibber ✓ Connected
+```
 
 ---
 
-## API Wrapping Pattern
+## Credential Management
 
-For cloud APIs (MELCloud, Nibe Uplink, Tesla Fleet):
+### Credential Types
 
-```mermaid
-sequenceDiagram
-    participant Core
-    participant Plugin
-    participant CloudAPI
-    
-    Core->>Plugin: schedule.heat_pump.power (via query)
-    Plugin->>Plugin: Compare to current state
-    Plugin->>CloudAPI: POST /setpoint
-    CloudAPI-->>Plugin: 200 OK
-    Plugin->>Core: hvac.power.actual (report)
-```
+| Type | Use Case | UX |
+|------|----------|-----|
+| `oauth` | HeimWatt-registered OAuth (Nibe, Tesla) | Click Connect → login on provider → done |
+| `oauth_user_provided` | Community plugins, niche providers | User registers own app, enters client_id/secret |
+| `password` | Legacy APIs (MELCloud) | Enter username/password in WebUI |
+| `api_key` | Simple APIs (Nordpool) | Paste API key in WebUI |
 
-**Key Insight**: The plugin is a **translator** between semantic types and vendor protocols.
-
-### Credential Management
+### Manifest Schema
 
 ```json
 {
   "credentials": {
-    "storage": "core",        // Core stores, plugin requests via SDK
-    "required": ["username", "password"],
-    "optional": ["api_key"]
+    "type": "oauth",
+    "display_name": "Nibe Uplink"
   }
 }
 ```
 
-SDK provides:
-```c
-int sdk_credential_get(plugin_ctx* ctx, const char* key, char** value);
-```
-
-Core encrypts credentials at rest. Plugin never persists them.
-
----
-
-## Sensor Integration
-
-Sensors are plugins with `sense` + `report` capabilities:
-
+For `oauth_user_provided` (community plugins):
 ```json
 {
-  "id": "com.local.temperature-probe",
-  "capabilities": ["sense", "report"],
-  "provides": ["zone.living_room.temperature"],
-  "interval_ms": 1000
+  "credentials": {
+    "type": "oauth_user_provided",
+    "provider_name": "Growatt Solar",
+    "registration_url": "https://openapi.growatt.com/register",
+    "instructions": "Register an app at Growatt developer portal",
+    "auth_url": "https://openapi.growatt.com/oauth/authorize",
+    "token_url": "https://openapi.growatt.com/oauth/token",
+    "scopes": ["read", "write"]
+  }
 }
 ```
 
-**Protocol Options**:
-1. **Poll**: SDK polls sensor on interval (simple, works with HTTP devices)
-2. **Push**: Sensor pushes to Core via MQTT bridge (for Zigbee/Z-Wave)
-3. **FD Event**: SDK watches file descriptor (for serial/GPIO)
-
-Current SDK already supports all three via `sdk_register_ticker`, MQTT plugin, and `sdk_register_fd`.
-
----
-
-## Constraint Plugins
-
-Output plugins that provide optimization constraints:
-
+For `password`:
 ```json
 {
-  "id": "com.heimwatt.battery-constraints",
-  "capabilities": ["constrain"],
-  "constraint_types": ["storage.soc.min", "storage.soc.max", "storage.power.max"]
+  "credentials": {
+    "type": "password",
+    "required": ["username", "password"],
+    "display_name": "MELCloud Account"
+  }
 }
 ```
 
-When solver runs, it queries all `constrain` plugins:
+### Token Refresh
+
+Core handles token refresh transparently. Plugin just calls:
 
 ```c
-// Solver asks Core for constraints
-sdk_query_constraints(ctx, "storage.*", &constraints, &count);
+char *token = NULL;
+if (sdk_credential_get(ctx, "access_token", &token) == 0) {
+    // Token is always fresh — Core refreshed if needed
+    make_api_request(token);
+    sdk_credential_destroy(&token);  // Zero and free
+}
 ```
 
-Core aggregates from all constraint providers.
+If refresh fails (user revoked, token expired), `sdk_credential_get()` returns error. Plugin reports "disconnected" status.
+
+### Encryption
+
+Credentials encrypted at rest using password-derived key:
+
+```
+User Password + Salt → Argon2id → 256-bit Key → AES-256-GCM
+```
+
+**Trade-off**: Password reset = must re-connect external services (acceptable).
 
 ---
 
-## Recommendation
+## Rate Limiting & Safety
 
-1. **Adopt Capability-Based Model** (Option A)
-2. **Add `capabilities` to manifest.json**
-3. **Core enforces capability checks** (plugin without `actuate` can't call `sdk_device_command`)
-4. **Keep IN/OUT as convenience aliases** for legacy compatibility:
-   - `"type": "in"` → `capabilities: ["report"]`
-   - `"type": "out"` → `capabilities: ["query", "report"]`
+Multi-layer protection for device actuation:
+
+### Layer 1: Solver Constraints (Global)
+
+Built into optimization — solver cannot produce schedules that violate:
+- Minimum cycle time (e.g., 5 minutes between on/off)
+- Maximum cycles per hour
+
+### Layer 2: Device Type Defaults (SDK)
+
+SDK knows device category defaults:
+
+| Device Type | Min Cycle | Max Cycles/Hour |
+|-------------|-----------|-----------------|
+| `battery` | 5 min | 4 |
+| `heat_pump` | 10 min | 3 |
+| `ev_charger` | 1 min | 10 |
+
+### Layer 3: Plugin Override (Tighten Only)
+
+Plugin can specify stricter limits in manifest:
+
+```json
+{
+  "safety": {
+    "min_cycle_s": 900,
+    "max_cycles_per_hour": 2
+  }
+}
+```
+
+Cannot loosen SDK defaults.
+
+### Layer 4: Runtime Enforcement
+
+SDK rejects commands that violate limits:
+```
+[WARN] Cycle rejected: Battery last cycled 2 min ago (min: 5 min)
+```
+
+Logged and visible in WebUI.
 
 ---
 
-## Open Questions
+## Plugin Installation
 
-- [ ] Should `actuate` capability require user approval on install?
-- [ ] How to handle plugins that need to control multiple device types?
-- [ ] Rate limiting for actuate commands (prevent device damage)?
+> **See [05_webui_auth_safety.md](05_webui_auth_safety.md#plugin-store--installation)** for full WebUI flows.
+
+### Flow Summary
+
+1. User browses Plugin Store in WebUI
+2. Click "Install" → Core downloads from repository
+3. Signature verified (Official HeimWatt or Community)
+4. Manifest validated
+5. If plugin has `actuate` capability → user approval required
+6. Credential entry form shown
+7. Plugin loaded and running
+
+### Validation
+
+Manifest validated at load time. Invalid manifests rejected with clear error:
+
+```
+❌ Plugin "Broken Plugin" failed to load
+   Error: Invalid capability 'reprot' (did you mean 'report'?)
+```
+
+---
+
+## SDK API Summary
+
+### Capabilities
+
+```c
+// Report semantic data to Core
+int sdk_report_value(plugin_ctx *ctx, const char *type_name, double value, int64_t ts);
+
+// Query semantic data from Core
+int sdk_query_latest(plugin_ctx *ctx, semantic_type type, sdk_data_point *out);
+
+// Device control (requires 'actuate' capability)
+int sdk_device_setpoint(plugin_ctx *ctx, const char *device_id, double value);
+```
+
+### Credentials
+
+```c
+// Get credential (Core handles refresh transparently)
+int sdk_credential_get(plugin_ctx *ctx, const char *key, char **value);
+
+// Zero and free credential
+void sdk_credential_destroy(char **value);
+```
+
+### Scheduling
+
+```c
+int sdk_register_ticker(plugin_ctx *ctx, sdk_tick_handler handler);
+int sdk_register_cron(plugin_ctx *ctx, const char *expression, sdk_tick_handler handler);
+int sdk_register_fd(plugin_ctx *ctx, int fd, sdk_io_handler handler);
+```
+
+---
+
+## Decisions Summary
+
+| Topic | Decision |
+|-------|----------|
+| Plugin abstraction | **Capabilities**: report, query, actuate, constrain, sense |
+| Device model | **Plugins declare devices**, not services |
+| `actuate` approval | **Required** — user must approve at install |
+| Credential types | **Four types**: oauth, oauth_user_provided, password, api_key |
+| Credential storage | **Password-derived key** (Argon2id → AES-256-GCM) |
+| Token refresh | **Core handles transparently** |
+| Rate limiting | **Multi-layer**: Solver → SDK defaults → Plugin override → Runtime |
+| Validation | **At load time**, fail fast with clear errors |
+
+---
+
+## Cross-Document References
+
+| Document | Relationship |
+|----------|-------------|
+| [05_webui_auth_safety.md](05_webui_auth_safety.md) | Plugin Store, WebUI flows, credential entry |
+| [04_concurrency_strategy.md](04_concurrency_strategy.md) | Non-blocking IPC for credential requests |
+| [semantic_types.md](../reference/semantic_types.md) | Valid types for `provides`/`consumes` |
+
+---
+
+## Implementation Priority
+
+1. **Manifest schema update** — add capabilities, devices, credentials
+2. **SDK credential API** — `sdk_credential_get/destroy`
+3. **Core capability enforcement** — reject unauthorized calls
+4. **Solver constraints** — min cycle times built into optimization
+5. **Plugin Store API** — repository browsing, download, install
