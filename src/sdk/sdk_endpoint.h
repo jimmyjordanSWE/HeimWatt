@@ -1,4 +1,4 @@
-/**
+/*
  * @file sdk_endpoint.h
  * @brief Endpoint registration (internal)
  *
@@ -8,11 +8,11 @@
 #ifndef HEIMWATT_SDK_ENDPOINT_H
 #define HEIMWATT_SDK_ENDPOINT_H
 
-#include <errno.h>
-
 #include "heimwatt_sdk.h"
 
-/**
+#include <errno.h>
+
+/*
  * Register endpoint with Core via IPC.
  *
  * @param ctx    Plugin context
@@ -20,15 +20,15 @@
  * @param path   URL path
  * @return 0 on success, negative errno on error
  */
-int sdk_endpoint_register(plugin_ctx *ctx, const char *method, const char *path);
+int sdk_endpoint_register(plugin_ctx* ctx, const char* method, const char* path);
 
-/**
+/*
  * Handle incoming HTTP_REQUEST message.
  *
  * @param ctx          Plugin context
  * @param request_json Raw JSON request from Core
  * @return 0 on success, negative errno on error
  */
-int sdk_endpoint_dispatch(plugin_ctx *ctx, const char *request_json);
+int sdk_endpoint_dispatch(plugin_ctx* ctx, const char* request_json);
 
 #endif  // HEIMWATT_SDK_ENDPOINT_H */

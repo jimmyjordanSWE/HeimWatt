@@ -1,35 +1,55 @@
+# HEIMWATT Clang-Format Configuration
+# Matches: docs/standards/coding.md
 ---
 Language:        Cpp
 BasedOnStyle:    Google
-# HEIMWATT Style Overrides
+
+# Indentation
 IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+ContinuationIndentWidth: 4
+
+# Line Length
 ColumnLimit:     100
-SortIncludes:    true
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass:      true
-  AfterControlStatement: Always
-  AfterEnum:       true
-  AfterFunction:   true
-  AfterNamespace:  true
-  AfterStruct:     true
-  AfterUnion:      true
-  BeforeCatch:     true
-  BeforeElse:      true
-  IndentBraces:    false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
-  SplitEmptyNamespace: true
-Standard:        Latest
+
+# Braces: K&R style (same line)
+BreakBeforeBraces: Attach
+
+# Control flow: don't collapse to single line
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Pointer/Reference alignment: left (char* ptr)
 DerivePointerAlignment: false
-PointerAlignment: Right
+PointerAlignment: Left
+
+# Space after cast: (int) x → (int) x
 SpaceAfterCStyleCast: true
+
+# Include ordering (matches coding standard)
+# 1. Own header, 2. System <>, 3. Project ""
+SortIncludes:    CaseSensitive
 IncludeBlocks:   Regroup
 IncludeCategories:
-  - Regex:           '^"module\.h"'
+  - Regex:           '^"[^/]*\.h"$'    # Own header (no path)
     Priority:        -1
-  - Regex:           '^<'
+  - Regex:           '^<'              # System headers
     Priority:        1
-  - Regex:           '^"'
+  - Regex:           '^"'              # Project headers
     Priority:        2
+
+# Align
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# Misc
+ReflowComments:  true
+SpacesBeforeTrailingComments: 2
+Standard:        c++11  # Required for C99/C11 compatibility
 ...

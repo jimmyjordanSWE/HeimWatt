@@ -5,8 +5,7 @@
 #include <stdint.h>
 
 // --- Constants ---
-enum
-{
+enum {
     MAX_BUFFER_SIZE = 4096,
     MAX_LOG_MSG = 1024,
     SECS_PER_HOUR = 3600,
@@ -14,15 +13,9 @@ enum
     DEFAULT_PORT = 8080
 };
 
-/**
+/*
  * @brief Log severity levels.
  */
-typedef enum
-{
-    LOG_LEVEL_DEBUG = 0,
-    LOG_LEVEL_INFO,
-    LOG_LEVEL_WARN,
-    LOG_LEVEL_ERROR
-} log_level;
+typedef enum { LOG_LEVEL_DEBUG = 0, LOG_LEVEL_INFO, LOG_LEVEL_WARN, LOG_LEVEL_ERROR } log_level;
 
 #endif  // HEIMWATT_TYPES_H

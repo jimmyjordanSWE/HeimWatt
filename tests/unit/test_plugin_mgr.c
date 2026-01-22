@@ -1,4 +1,4 @@
-/**
+/*
  * @file test_plugin_mgr.c
  * @brief Unit tests for plugin manager
  */
@@ -16,10 +16,9 @@
 static char test_dir[512];
 static char test_sock[512];
 
-void plugin_mgr_setUp(void)
-{
+void plugin_mgr_setUp(void) {
     snprintf(test_dir, sizeof(test_dir), "/tmp/heimwatt_plugin_test_XXXXXX");
-    char *result = mkdtemp(test_dir);
+    char* result = mkdtemp(test_dir);
     TEST_ASSERT_NOT_NULL_MESSAGE(result, "Failed to create temp dir");
 
 #pragma GCC diagnostic push
@@ -28,8 +27,7 @@ void plugin_mgr_setUp(void)
 #pragma GCC diagnostic pop
 }
 
-void plugin_mgr_tearDown(void)
-{
+void plugin_mgr_tearDown(void) {
     char cmd[1024];
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
@@ -40,9 +38,8 @@ void plugin_mgr_tearDown(void)
 
 // --- Lifecycle Tests ---
 
-void test_plugin_mgr_init_destroy(void)
-{
-    plugin_mgr *mgr = NULL;
+void test_plugin_mgr_init_destroy(void) {
+    plugin_mgr* mgr = NULL;
     int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
     TEST_ASSERT_EQUAL_INT(0, ret);
     TEST_ASSERT_NOT_NULL(mgr);
@@ -54,9 +51,8 @@ void test_plugin_mgr_init_destroy(void)
     plugin_mgr_destroy(&mgr);
 }
 
-void test_plugin_mgr_init_null_params(void)
-{
-    plugin_mgr *mgr = NULL;
+void test_plugin_mgr_init_null_params(void) {
+    plugin_mgr* mgr = NULL;
 
     int ret = plugin_mgr_init(NULL, test_dir, test_sock);
     TEST_ASSERT_TRUE(ret < 0);
@@ -70,9 +66,8 @@ void test_plugin_mgr_init_null_params(void)
 
 // --- Scan Tests ---
 
-void test_plugin_mgr_scan_empty_dir(void)
-{
-    plugin_mgr *mgr = NULL;
+void test_plugin_mgr_scan_empty_dir(void) {
+    plugin_mgr* mgr = NULL;
     int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
@@ -83,8 +78,7 @@ void test_plugin_mgr_scan_empty_dir(void)
     plugin_mgr_destroy(&mgr);
 }
 
-void test_plugin_mgr_scan_with_manifest(void)
-{
+void test_plugin_mgr_scan_with_manifest(void) {
     // Create subdirectories for plugins
     char in_dir[1024], plugin_dir[1024], manifest_path[1024];
     snprintf(in_dir, sizeof(in_dir), "%s/in", test_dir);
@@ -97,12 +91,12 @@ void test_plugin_mgr_scan_with_manifest(void)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.json", plugin_dir);
 #pragma GCC diagnostic pop
-    FILE *f = fopen(manifest_path, "w");
+    FILE* f = fopen(manifest_path, "w");
     TEST_ASSERT_NOT_NULL(f);
     fprintf(f, "{\"id\": \"com.test.plugin\", \"type\": \"in\", \"version\": \"1.0.0\"}");
     fclose(f);
 
-    plugin_mgr *mgr = NULL;
+    plugin_mgr* mgr = NULL;
     int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
@@ -114,20 +108,18 @@ void test_plugin_mgr_scan_with_manifest(void)
 
 // --- Query Tests ---
 
-void test_plugin_mgr_get_nonexistent(void)
-{
-    plugin_mgr *mgr = NULL;
+void test_plugin_mgr_get_nonexistent(void) {
+    plugin_mgr* mgr = NULL;
     int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
-    plugin_handle *h = plugin_mgr_get(mgr, "nonexistent.plugin");
+    plugin_handle* h = plugin_mgr_get(mgr, "nonexistent.plugin");
     TEST_ASSERT_NULL(h);
 
     plugin_mgr_destroy(&mgr);
 }
 
-void test_plugin_mgr_manifest_capabilities(void)
-{
+void test_plugin_mgr_manifest_capabilities(void) {
     // Create subdirectories
     char in_dir[1024], plugin_dir[1024], manifest_path[1024];
     snprintf(in_dir, sizeof(in_dir), "%s/in", test_dir);
@@ -136,25 +128,29 @@ void test_plugin_mgr_manifest_capabilities(void)
     mkdir(plugin_dir, 0755);
 
     // Create manifest with capabilities
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.json", plugin_dir);
-    FILE *f = fopen(manifest_path, "w");
+#pragma GCC diagnostic pop
+    FILE* f = fopen(manifest_path, "w");
     TEST_ASSERT_NOT_NULL(f);
-    fprintf(f, "{\n"
-               "  \"id\": \"com.test.caps\",\n"
-               "  \"type\": \"in\",\n"
-               "  \"version\": \"1.0.0\",\n"
-               "  \"capabilities\": [\"actuate\", \"report\"]\n"
-               "}");
+    fprintf(f,
+            "{\n"
+            "  \"id\": \"com.test.caps\",\n"
+            "  \"type\": \"in\",\n"
+            "  \"version\": \"1.0.0\",\n"
+            "  \"capabilities\": [\"actuate\", \"report\"]\n"
+            "}");
     fclose(f);
 
-    plugin_mgr *mgr = NULL;
+    plugin_mgr* mgr = NULL;
     int ret = plugin_mgr_init(&mgr, test_dir, test_sock);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     ret = plugin_mgr_scan(mgr);
     TEST_ASSERT_TRUE(ret >= 0);
 
-    plugin_handle *h = plugin_mgr_get(mgr, "com.test.caps");
+    plugin_handle* h = plugin_mgr_get(mgr, "com.test.caps");
     TEST_ASSERT_NOT_NULL(h);
 
     // Check capabilities

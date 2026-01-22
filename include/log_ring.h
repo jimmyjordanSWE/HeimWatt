@@ -4,11 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/**
+/*
  * @brief Represents a single log entry in the ring buffer.
  */
-typedef struct log_entry
-{
+typedef struct log_entry {
     int64_t timestamp;
     int level;
     char category[32];
@@ -16,23 +15,23 @@ typedef struct log_entry
     char message[256];
 } log_entry;
 
-/**
+/*
  * @brief Initialize the global log ring buffer.
  *
  * @param capacity Number of entries to store (e.g., 100).
  */
 void log_ring_init(size_t capacity);
 
-/**
+/*
  * @brief Push a new entry to the ring buffer.
  *
  * Thread-safe. Overwrites oldest entry if full.
  *
  * @param entry Pointer to entry data (will be copied).
  */
-void log_ring_push(const log_entry *entry);
+void log_ring_push(const log_entry* entry);
 
-/**
+/*
  * @brief Retrieve recent log entries.
  *
  * Thread-safe.
@@ -41,9 +40,9 @@ void log_ring_push(const log_entry *entry);
  * @param max_count Capacity of the out buffer.
  * @return Number of entries written.
  */
-size_t log_ring_get_recent(log_entry *out, size_t max_count);
+size_t log_ring_get_recent(log_entry* out, size_t max_count);
 
-/**
+/*
  * @brief Export recent logs as a JSON string.
  *
  * Returns a malloc'd string containing a JSON object with a "logs" array.
@@ -52,6 +51,6 @@ size_t log_ring_get_recent(log_entry *out, size_t max_count);
  * @param max_count Maximum number of entries to include.
  * @return JSON string or NULL on allocation failure.
  */
-char *log_ring_to_json(size_t max_count);
+char* log_ring_to_json(size_t max_count);
 
 #endif /* HEIMWATT_LOG_RING_H */

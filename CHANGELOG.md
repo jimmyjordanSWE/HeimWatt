@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## 2026-01-22
+
+### Fixes & Refactoring
+- **Compilation & Safety**:
+  - Addressed all compilation warnings reported by compiler and static analyzer.
+  - Fixed safety issues: replaced unsafe `strcpy` with `memcpy` in `sdk/config.c` and `sdk/lifecycle.c`, fixed uninitialized variables in `sdk/report.c` and `tcp_server.c`.
+  - Suppressed benign truncation warnings in tests.
+- **Complexity Reduction**:
+  - **Server Core**: Refactored monolithic `heimwatt_run_with_shutdown_flag` into minimal helper functions (`setup_signalfd`, `handle_signal_event`, `handle_new_connection`, `handle_client_event`) to drastically reduce cognitive complexity and improve maintainability.
+  - **HTTP Server**: Split `http_server_run` and `handle_read` in `src/net/http_server.c` into focused helper functions (`http_server_init_net`, `process_request`).
+  - **HTTP Parser**: Decomposed `http_parse_request` into `parse_request_line` and `parse_headers`.
+- **Bug Fixes**:
+  - **IPC Tests**: Fixed a race condition in `test_ipc.c` where a non-blocking socket read failure (`EAGAIN`) caused the test to exit early, resulting in a reported memory leak. Added retry logic for robust socket reading in tests.
+
+---
+
 ## 2026-01-21
 
 - **12:12**: Finalized Graceful Shutdown:

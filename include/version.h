@@ -1,7 +1,7 @@
 #ifndef HEIMWATT_VERSION_H
 #define HEIMWATT_VERSION_H
 
-/**
+/*
  * @file version.h
  * @brief API Version Information
  *
@@ -24,23 +24,23 @@
  * Version Numbers
  * ============================================================================ */
 
-/** Major version (breaking changes) */
+/* Major version (breaking changes) */
 #define HEIMWATT_VERSION_MAJOR 0
 
-/** Minor version (backwards-compatible additions) */
+/* Minor version (backwards-compatible additions) */
 #define HEIMWATT_VERSION_MINOR 1
 
-/** Patch version (bug fixes) */
+/* Patch version (bug fixes) */
 #define HEIMWATT_VERSION_PATCH 0
 
-/** Version string */
+/* Version string */
 #define HEIMWATT_VERSION_STRING "0.1.0"
 
 /* ============================================================================
  * IPC Protocol Version
  * ============================================================================ */
 
-/**
+/*
  * IPC protocol version.
  * Increment when message format changes.
  *
@@ -48,7 +48,7 @@
  */
 #define HEIMWATT_IPC_VERSION 1
 
-/**
+/*
  * Minimum IPC version supported.
  * Older plugins will be rejected.
  */
@@ -58,28 +58,27 @@
  * Compile-Time Compatibility
  * ============================================================================ */
 
-/**
+/*
  * SDK version that plugins were compiled against.
  * Plugins should call HEIMWATT_CHECK_SDK_VERSION() in their init.
  */
 #define HEIMWATT_SDK_VERSION \
     ((HEIMWATT_VERSION_MAJOR << 16) | (HEIMWATT_VERSION_MINOR << 8) | HEIMWATT_VERSION_PATCH)
 
-/**
+/*
  * Check SDK version compatibility at runtime.
  * Returns 0 if compatible, -1 if not.
  *
  * @param compiled_version The SDK version the plugin was compiled with.
  * @return 0 if compatible, -1 if major version mismatch.
  */
-static inline int heimwatt_check_version(int compiled_version)
-{
+static inline int heimwatt_check_version(int compiled_version) {
     int compiled_major = (compiled_version >> 16) & 0xFF;
     int runtime_major = HEIMWATT_VERSION_MAJOR;
     return (compiled_major == runtime_major) ? 0 : -1;
 }
 
-/**
+/*
  * Macro for plugins to verify SDK compatibility.
  * Place at start of plugin's main function.
  */

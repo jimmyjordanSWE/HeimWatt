@@ -1,4 +1,4 @@
-/**
+/*
  * @file signal_util.h
  * @brief Signal handling utilities
  *
@@ -8,7 +8,7 @@
 #ifndef HEIMWATT_SIGNAL_UTIL_H
 #define HEIMWATT_SIGNAL_UTIL_H
 
-/**
+/*
  * Setup signal handlers for graceful shutdown.
  * Handles SIGINT, SIGTERM.
  *
@@ -16,20 +16,20 @@
  */
 int signal_setup(void);
 
-/**
+/*
  * Check if shutdown has been requested.
  *
  * @return 1 if shutdown requested, 0 otherwise
  */
 int signal_shutdown_requested(void);
 
-/**
+/*
  * Request shutdown programmatically.
  * Thread-safe.
  */
 void signal_request_shutdown(void);
 
-/**
+/*
  * Block signals in current thread.
  * Useful for worker threads.
  *

@@ -1,15 +1,16 @@
+#include "sdk_internal.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <heimwatt_sdk.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "sdk_internal.h"
-
-int sdk_register_ticker(plugin_ctx *ctx, sdk_tick_handler handler)
-{
-    if (!ctx || !handler) return -EINVAL;
-    if (ctx->ticker_count >= SDK_MAX_TICKERS) return -ENOSPC;
+int sdk_register_ticker(plugin_ctx* ctx, sdk_tick_handler handler) {
+    if (!ctx || !handler)
+        return -EINVAL;
+    if (ctx->ticker_count >= SDK_MAX_TICKERS)
+        return -ENOSPC;
 
     // Spec assumes ticker is based on manifest interval?
     // Actually, spec says: "Registers handler for the interval_seconds defined in manifest."
@@ -31,7 +32,7 @@ int sdk_register_ticker(plugin_ctx *ctx, sdk_tick_handler handler)
     // "Registers handler for the interval_seconds defined in manifest."
     // OK, so we rely on Core to tell us the interval, OR we look it up.
 
-    sdk_ticker_entry *e = &ctx->tickers[ctx->ticker_count++];
+    sdk_ticker_entry* e = &ctx->tickers[ctx->ticker_count++];
     e->handler = handler;
     e->is_cron = false;
     e->interval_sec = 3600;  // Default to 1h to match typical forecast plugins
@@ -40,12 +41,13 @@ int sdk_register_ticker(plugin_ctx *ctx, sdk_tick_handler handler)
     return 0;
 }
 
-int sdk_register_cron(plugin_ctx *ctx, const char *expr, sdk_tick_handler handler)
-{
-    if (!ctx || !expr || !handler) return -EINVAL;
-    if (ctx->ticker_count >= SDK_MAX_TICKERS) return -ENOSPC;
+int sdk_register_cron(plugin_ctx* ctx, const char* expr, sdk_tick_handler handler) {
+    if (!ctx || !expr || !handler)
+        return -EINVAL;
+    if (ctx->ticker_count >= SDK_MAX_TICKERS)
+        return -ENOSPC;
 
-    sdk_ticker_entry *e = &ctx->tickers[ctx->ticker_count++];
+    sdk_ticker_entry* e = &ctx->tickers[ctx->ticker_count++];
     e->handler = handler;
     e->is_cron = true;
     e->cron_expr = strdup(expr);
@@ -54,29 +56,31 @@ int sdk_register_cron(plugin_ctx *ctx, const char *expr, sdk_tick_handler handle
     return 0;
 }
 
-int sdk_register_fd(plugin_ctx *ctx, int fd, sdk_io_handler handler)
-{
-    if (!ctx || fd < 0 || !handler) return -EINVAL;
-    if (ctx->fd_count >= SDK_MAX_FDS) return -ENOSPC;
+int sdk_register_fd(plugin_ctx* ctx, int fd, sdk_io_handler handler) {
+    if (!ctx || fd < 0 || !handler)
+        return -EINVAL;
+    if (ctx->fd_count >= SDK_MAX_FDS)
+        return -ENOSPC;
 
-    sdk_fd_entry *e = &ctx->m_fds[ctx->fd_count++];
+    sdk_fd_entry* e = &ctx->m_fds[ctx->fd_count++];
     e->fd = fd;
     e->handler = handler;
 
     return 0;
 }
 
-int64_t sdk_time_now(void) { return (int64_t) time(NULL); }
+int64_t sdk_time_now(void) {
+    return (int64_t) time(NULL);
+}
 
-int64_t sdk_time_parse_iso(const char *str)
-{
-    if (!str) return 0;
+int64_t sdk_time_parse_iso(const char* str) {
+    if (!str)
+        return 0;
     struct tm tm;
     memset(&tm, 0, sizeof(tm));
     // Simple ISO 8601 parser (YYYY-MM-DDTHH:MM:SSZ)
     // strptime is POSIX
-    if (strptime(str, "%Y-%m-%dT%H:%M:%S", &tm) == NULL)
-    {
+    if (strptime(str, "%Y-%m-%dT%H:%M:%S", &tm) == NULL) {
         return 0;
     }
     return (int64_t) timegm(&tm);  // UTC

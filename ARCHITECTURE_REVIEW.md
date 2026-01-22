@@ -1,14 +1,27 @@
 # HeimWatt Architecture Review
 
-> **Review Date**: 2026-01-20  
-> **Status**: Active Development
+> **Review Date**: 2026-01-21  
+> **Status**: Active Development  
+> **Last Audit**: LLM Code Review (2026-01-21)
+
+---
+
+## Executive Summary
+
+The HeimWatt architecture demonstrates solid C99 fundamentals with consistent opaque pointer patterns, process-isolated plugins, and a semantic type system. However, code review and design analysis reveal **gaps between documented architecture and implementation reality**.
+
+Key findings:
+1. **Design Studies Not Created**: The 5 design studies referenced below don't exist yet
+2. **Core Coupling**: `heimwatt_ctx` aggregates all system state, creating implicit dependencies
+3. **Event Loop Complexity**: `heimwatt_run_with_shutdown_flag` (270 lines) is a God Unit
+4. **Concurrency Bug**: `db_query_point_exists_tier1` missing mutex lock
 
 ---
 
 ## Greatest Strengths
 
 ### 1. Opaque Pointer Pattern
-Consistent use of opaque pointers (`heimwatt_ctx`, `plugin_mgr`, `db_handle`, `http_server`, `lps_solver`) provides true encapsulation and ABI stability. Same pattern as SQLite, libuv, OpenSSL.
+Consistent use of opaque pointers (`heimwatt_ctx`, `plugin_mgr`, `db_handle`, `http_server`) provides true encapsulation and ABI stability. Same pattern as SQLite, libuv, OpenSSL.
 
 ### 2. Plugin Architecture with Process Isolation
 Forking plugins into separate processes provides:
@@ -21,7 +34,7 @@ Forking plugins into separate processes provides:
 `semantic_types.h` generates enums, metadata tables, and string converters from single source of truth. Pattern used in professional game engines and embedded systems.
 
 ### 4. Symmetric Lifecycle Pairs
-Double-pointer destroy pattern (`destroy(T**)`) prevents use-after-free by NULLing caller's pointer. Combined with `SAFE_FREE` macro - defensive programming done right.
+Double-pointer destroy pattern (`destroy(T**)`) prevents use-after-free by NULLing caller's pointer. Combined with `SAFE_FREE` macro — defensive programming done right.
 
 ### 5. Newline-Delimited JSON Protocol
 IPC uses NDJSON protocol (same as Docker daemon APIs, Language Server Protocol). Simple, debuggable, robust.
@@ -30,58 +43,103 @@ IPC uses NDJSON protocol (same as Docker daemon APIs, Language Server Protocol).
 
 ## Weaknesses / Areas for Improvement
 
-### 1. ⚠️ "LPS" is Actually Dynamic Programming
+### 1. ⚠️ Core Event Loop is a God Unit
 
-**Current**: `lps.c` implements Dynamic Programming with state discretization, not Linear Programming.
+> **Code Location**: [server.c#L451-L720](src/server.c#L451-L720)  
+> **Severity**: High
 
-**Issue**: LP/MILP uses Simplex/Interior Point with arbitrary linear constraints. DP discretizes into 101 states with O(T×S×A) complexity.
+**Current State**: `heimwatt_run_with_shutdown_flag` (270 lines) handles:
+- Signal handling via `signalfd`
+- epoll event loop setup
+- HTTP thread lifecycle
+- IPC connection management (accept/read/write/disconnect)
+- Periodic tasks (`plugin_mgr_check_health`, `db_tick`)
 
-**Actions**:
-- [ ] Rename to `dp_solver` or `battery_scheduler`
-- [ ] Consider integrating HiGHS for true LP/MILP when thermal dynamics needed
-- [ ] Document that DP complexity grows exponentially with state dimensions
+**Problem**: Changes to any subsystem risk breaking others. Implicit coupling through shared epoll and connection arrays makes the code fragile.
 
-**Regarding LP constraint limits**: Real LP solvers (HiGHS, Gurobi) handle millions of constraints. The plugin architecture is well-suited for pluggable constraint providers.
+**Design Decision Required**:
 
-> User desicion: Remove this solver and lets work on a real professional one as explained below. 
+| Option | Pros | Cons |
+|--------|------|------|
+| **A: Reactor Pattern** | Clean separation, testable components | More indirection, slightly higher complexity |
+| **B: Keep Monolithic** | Simple to trace, all logic in one place | Fragile, hard to test, God Unit anti-pattern |
 
----
-
-### 2. No Persistent State Between Restarts
-
-- [ ] Add `state.json` or SQLite for runtime configuration
-- [ ] Persist plugin credentials and scheduling state
-
-> Good idea, but i feel implementation needs more discussion and details.
----
-
-### 3. Single-Threaded Core with Blocking Patterns
-
-- [ ] Consider worker thread pool for JSON parsing
-- [ ] Use SIGCHLD for non-blocking plugin health checks
-- [ ] (Low priority for home energy system)
-
-> Blocking is unacceptable. Explain more about my options here. Both sound fine, give me more details. 
----
-
-### 4. SDK IPC is Request-Response Only
-
-Current synchronous pattern prevents:
-- Server-initiated push
-- Streaming data
-- Parallel operations
-
-- [ ] Enhance SDK for bidirectional messaging
-
-> I would like to do a deep dive design study on the SDK. We need it to be perfect. It MUST be extremely easy toi extend the system with new plugins. For example, is in / out the correct abstraction? do we need more types? sub types? how do we integra t esensors, actuators, constraints, etc? How do we wrap APIs that can control devices, nibe uplink etc? The SDK and the COre needs to handle all these things from the start. 
+**Recommendation**: Option A — Factor into distinct reactors:
+- `signal_reactor_poll()` — reads signalfd, sets shutdown flag
+- `ipc_reactor_poll()` — handles plugin connections
+- `supervision_tick()` — health checks and DB maintenance
 
 ---
 
-### 5. Fixed Buffer Sizes Everywhere
+### 2. ⚠️ `heimwatt_ctx` Aggregates All State
 
-- [ ] Document maximum sizes in spec
-- [ ] Add runtime validation with clear errors
-> What else should we do? I dont want malloc eveywhere. Suggest options. Larger buffers is just kicking the can down the road right?
+> **Code Location**: [server_internal.h#L21-L57](src/server_internal.h#L21-L57)  
+> **Severity**: Medium
+
+**Current State**: `heimwatt_ctx` contains:
+- Database handle (`db_handle*`)
+- IPC server (`ipc_server*`)
+- Plugin manager (`plugin_mgr*`)
+- HTTP server (`http_server*`)
+- Thread pool (`thread_pool*`)
+- Connection array and registry
+- Global configuration (`lat`, `lon`, `area`)
+
+**Problem**: Every function receiving `heimwatt_ctx` has access to *all* system resources. This creates:
+- Implicit coupling (function touching `conns[]` can also touch `db`)
+- Testing difficulty (must mock entire context)
+- Violation of interface segregation principle
+
+**Design Decision Required**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A: Sub-Contexts** | Clean interfaces, explicit dependencies | More parameter passing |
+| **B: Keep Unified** | Simple initialization, everything accessible | Coupling, testing difficulty |
+
+**Recommendation**: Option A — Break into scoped contexts:
+```
+heimwatt_ctx (lifecycle owner only)
+├── server_stats (for API handlers)
+├── ipc_ctx (for IPC handlers)  
+└── plugin_ctx (for plugin management)
+```
+
+---
+
+### 3. ⚠️ Database Locking Strategy
+
+> **Code Location**: [db.c#L30](src/db/db.c#L30)  
+> **Severity**: Medium (Design) + High (Bug)
+
+**Current State**: Single `pthread_mutex_t` serializes all reads and writes across all backends.
+
+**Known Bug**: `db_query_point_exists_tier1` (L235-239) accesses backend without acquiring mutex — data race.
+
+**Design Decision Required**:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A: Fix Bug, Keep Coarse Lock** | Simple, correct, sufficient for 1-2 backends | Bottleneck if network backend added |
+| **B: Read-Write Lock** | Concurrent reads, acceptable for current scale | Complexity increase |
+| **C: Per-Backend Locks** | Maximum parallelism | Complex deadlock avoidance needed |
+
+**Recommendation**: Option A for now — fix the bug, document that coarse locking is intentional for simplicity. Revisit when network backends are added.
+
+---
+
+### 4. Design Studies Created
+
+The following design studies are available for iteration:
+
+| # | Topic | Document | Priority |
+|---|-------|----------|----------|
+| 1 | Core Event Loop | [01_core_event_loop.md](docs/design/01_core_event_loop.md) | P1 — Address God Unit |
+| 2 | Context Decomposition | [02_context_decomposition.md](docs/design/02_context_decomposition.md) | P2 — Reduce coupling |
+| 3 | Database Concurrency | [03_database_concurrency.md](docs/design/03_database_concurrency.md) | P0 — Contains bug fix |
+| 4 | SDK Plugin Taxonomy | [04_sdk_plugin_taxonomy.md](docs/design/04_sdk_plugin_taxonomy.md) | P1 — API design |
+| 5 | Solver Integration | [05_solver_integration.md](docs/design/05_solver_integration.md) | P2 — HiGHS migration |
+
 ---
 
 ## Assessment Summary
@@ -89,45 +147,30 @@ Current synchronous pattern prevents:
 | Aspect | Rating | Notes |
 |--------|--------|-------|
 | Code Quality | 8/10 | Clean C, consistent patterns |
-| Architecture | 7/10 | Plugin isolation excellent |
+| Architecture | 6/10 | Plugin isolation excellent, core coupling needs work |
+| Documentation | 7/10 | Manuals good, design specs now exist |
 | Professional Standard | 7/10 | Comparable to early open source projects |
 | Scalability | 6/10 | Would need work for 100+ plugins |
-| Correctness | 8/10 | Energy balance verified, DP algorithm correct |
+| Correctness | 7/10 | One concurrency bug found |
 
 ---
 
-## Future Considerations
+## Open Design Questions
 
-### True LP/MILP Integration
+1. **Reactor vs Monolithic**: Should the event loop be refactored into separate reactors?
+   → See [01_core_event_loop.md](docs/design/01_core_event_loop.md)
 
-For thermal dynamics and multi-asset coupling, integrate HiGHS solver:
+2. **Context Decomposition**: Should `heimwatt_ctx` be broken into sub-contexts?
+   → See [02_context_decomposition.md](docs/design/02_context_decomposition.md)
 
-```
-[Constraint Provider Plugin: Battery] → SoC constraints
-[Constraint Provider Plugin: Thermal] → RC model constraints  
-[Constraint Provider Plugin: Grid]    → Import limits
-        ↓
-[Core LP Solver (HiGHS)]
-        ↓
-Optimal schedule
-```
+3. **DB Locking Strategy**: Fix bug and keep coarse lock, or migrate to RW lock?
+   → See [03_database_concurrency.md](docs/design/03_database_concurrency.md)
 
-HiGHS (MIT licensed) can handle millions of variables/constraints in seconds.
+4. **Plugin Taxonomy**: Capability-based or type-based plugin model?
+   → See [04_sdk_plugin_taxonomy.md](docs/design/04_sdk_plugin_taxonomy.md)
 
-> ✅ **Response**: Agreed. HiGHS is the gold standard for open-source MILP.  
-> **See**: [docs/design/sdk_plugin_taxonomy.md](docs/design/sdk_plugin_taxonomy.md) for constraint plugin architecture.
-
----
-
-## Design Studies (Implementation Order)
-
-| # | Topic | Document | Why This Order |
-|---|-------|----------|----------------|
-| **1** | Database Abstraction | [01_database_abstraction.md](docs/design/01_database_abstraction.md) | Foundation — everything else writes data through this |
-| **2** | Memory Strategy | [02_memory_strategy.md](docs/design/02_memory_strategy.md) | Second foundation — defines how all components allocate |
-| **3** | SDK Plugin Taxonomy | [03_sdk_plugin_taxonomy.md](docs/design/03_sdk_plugin_taxonomy.md) | API design — must be locked before adding more plugins |
-| **4** | Concurrency | [04_concurrency_strategy.md](docs/design/04_concurrency_strategy.md) | Performance — can be retrofitted after SDK is stable |
-| **5** | WebUI, Auth, Safety | [05_webui_auth_safety.md](docs/design/05_webui_auth_safety.md) | Polish — needs stable Core/SDK before building on top |
+5. **Solver Direction**: Commit to HiGHS integration or maintain DP solver?
+   → See [05_solver_integration.md](docs/design/05_solver_integration.md)
 
 ---
 

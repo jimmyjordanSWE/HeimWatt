@@ -147,7 +147,7 @@ We prioritize clear naming (variables, functions, types) over comments.
 For public interfaces (`.h` files), use **Doxygen-style** comments to ensure documentation shows up in IDE Intellisense properties.
 
 ```c
-/**
+/*
  * @brief  Loads the configuration from the specified path.
  * @param  path Path to the JSON config file.
  * @param  out  Output pointer for the config object.

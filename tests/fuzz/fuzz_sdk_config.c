@@ -1,4 +1,4 @@
-/**
+/*
  * @file fuzz_sdk_config.c
  * @brief AFL++ fuzz harness for SDK variable substitution
  */
@@ -17,39 +17,35 @@ __AFL_FUZZ_INIT();
 #endif
 
 // Stubs for linker dependencies (we don't use sdk_get_config, only substitution)
-int sdk_ipc_send(plugin_ctx *ctx, const char *json_msg)
-{
+int sdk_ipc_send(plugin_ctx *ctx, const char *json_msg) {
     (void) ctx;
     (void) json_msg;
     return 0;
 }
-int sdk_ipc_recv(plugin_ctx *ctx, char *buf, size_t len)
-{
+int sdk_ipc_recv(plugin_ctx *ctx, char *buf, size_t len) {
     (void) ctx;
     (void) buf;
     (void) len;
     return 0;
 }
 
-int main(void)
-{
+int main(void) {
 #ifdef __AFL_HAVE_MANUAL_CONTROL
     __AFL_INIT();
     unsigned char *buf = __AFL_FUZZ_TESTCASE_BUF;
-    while (__AFL_LOOP(10000))
-    {
+    while (__AFL_LOOP(10000)) {
         size_t len = __AFL_FUZZ_TESTCASE_LEN;
 #else
     char buf[4096];
     ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
-    if (n <= 0) return 0;
+    if (n <= 0)
+        return 0;
     size_t len = (size_t) n;
 #endif
 
         // Null terminate input
         char *input = malloc(len + 1);
-        if (!input)
-        {
+        if (!input) {
 #ifdef __AFL_HAVE_MANUAL_CONTROL
             continue;
 #else
@@ -66,8 +62,7 @@ int main(void)
         char *output = NULL;
         int ret = sdk_substitute_config_vars(input, now, &output);
 
-        if (ret == 0 && output)
-        {
+        if (ret == 0 && output) {
             free(output);
         }
 

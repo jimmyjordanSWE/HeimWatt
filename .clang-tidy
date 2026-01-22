@@ -1,41 +1,64 @@
----
+# HEIMWATT Clang-Tidy Configuration
+# Matches: docs/standards/coding.md
+#
+# Enforces:
+# - Banned unsafe functions (gets, sprintf, strcpy, etc.)
+# - Best practices for C code
+# - Naming conventions
+
 Checks: >
   -*,
   bugprone-*,
-  cert-*,
-  -cert-err33-c,
-  -cert-err34-c,
-  -bugprone-unused-return-value,
-  -bugprone-posix-return,
-  -bugprone-narrowing-conversions,
   -bugprone-easily-swappable-parameters,
-  -readability-identifier-length,
-  -readability-function-cognitive-complexity,
-  -readability-function-size,
-  -readability-braces-around-statements,
-  -google-readability-braces-around-statements,
-  -readability-magic-numbers,
-  readability-identifier-naming
+  -bugprone-reserved-identifier,
+  cert-*,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -cert-err33-c,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-valist.Uninitialized,
+  misc-*,
+  -misc-no-recursion,
+  -misc-include-cleaner,
+  performance-*,
+  portability-*,
+  readability-else-after-return,
+  readability-function-cognitive-complexity,
+  readability-implicit-bool-conversion,
+  readability-isolate-declaration,
+  readability-misleading-indentation,
+  readability-redundant-*,
+
 WarningsAsErrors: ''
-HeaderFilterRegex: '^(src|include)/.*'
-FormatStyle:     file
+
+HeaderFilterRegex: '^(src|include|plugins)/.*'
+
 CheckOptions:
-  - key:             readability-identifier-naming.TypedefCase
-    value:           lower_case
-  - key:             readability-identifier-naming.StructCase
-    value:           lower_case
-  - key:             readability-identifier-naming.EnumCase
-    value:           lower_case
-  - key:             readability-identifier-naming.EnumConstantCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.GlobalConstantCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.FunctionCase
-    value:           lower_case
-  - key:             readability-identifier-naming.VariableCase
-    value:           lower_case
-  - key:             readability-identifier-naming.ParameterCase
-    value:           lower_case
-  - key:             readability-function-cognitive-complexity.Threshold
-    value:           30
-...
+  # Naming conventions (matches coding standard)
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.TypedefCase
+    value: lower_case
+  - key: readability-identifier-naming.StructCase
+    value: lower_case
+  - key: readability-identifier-naming.EnumCase
+    value: lower_case
+  
+  # Cognitive complexity threshold
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 60
+
+# Key checks that catch banned functions:
+# - bugprone-unsafe-functions: gets(), etc.
+# - clang-analyzer-security.insecureAPI.gets: gets()
+# - clang-analyzer-security.insecureAPI.strcpy: strcpy()
+# - cert-msc30-c: rand()

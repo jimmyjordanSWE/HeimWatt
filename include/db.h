@@ -1,7 +1,7 @@
 #ifndef HEIMWATT_DB_H
 #define HEIMWATT_DB_H
 
-/**
+/*
  * @file db.h
  * @brief Database Interface
  *
@@ -34,10 +34,10 @@
 
 struct config;
 
+#include "semantic_types.h"
+
 #include <stddef.h>
 #include <stdint.h>
-
-#include "semantic_types.h"
 
 /* ============================================================================
  * Error Handling
@@ -60,7 +60,7 @@ struct config;
  * Opaque Handle
  * ============================================================================ */
 
-/**
+/*
  * @brief Opaque database handle.
  *
  * The internal structure is defined by the selected backend.
@@ -72,7 +72,7 @@ typedef struct db_handle db_handle;
  * Lifecycle
  * ============================================================================ */
 
-/**
+/*
  * @brief Open a database connection.
  *
  * Creates the database file if it does not exist.
@@ -80,16 +80,16 @@ typedef struct db_handle db_handle;
  *
  * @return 0 on success, error code on failure.
  */
-int db_open(db_handle **db, const struct config *cfg);
+int db_open(db_handle** db, const struct config* cfg);
 
-/**
+/*
  * @brief Close database connection and free resources.
  *
  * @param[in,out] db Pointer to handle (set to NULL on return)
  */
-void db_close(db_handle **db);
+void db_close(db_handle** db);
 
-/**
+/*
  * @brief Get last error message.
  *
  * Returns a human-readable error description for the most recent
@@ -108,7 +108,7 @@ void db_close(db_handle **db);
  * Optimized for time-series queries on known data types.
  */
 
-/**
+/*
  * @brief Insert a Tier 1 data point.
  *
  * @param db        Database handle.
@@ -119,10 +119,10 @@ void db_close(db_handle **db);
  * @param source_id Plugin ID that reported this data.
  * @return 0 on success, error code on failure.
  */
-int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double value,
-                    const char *currency, const char *source_id);
+int db_insert_tier1(db_handle* db, semantic_type type, int64_t timestamp, double value,
+                    const char* currency, const char* source_id);
 
-/**
+/*
  * @brief Query the most recent value for a semantic type.
  *
  * @param[in]  db      Database handle.
@@ -131,9 +131,9 @@ int db_insert_tier1(db_handle *db, semantic_type type, int64_t timestamp, double
  * @param[out] out_ts  Output timestamp.
  * @return 0 if found, DB_NOT_FOUND if no data, error code on failure.
  */
-int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, int64_t *out_ts);
+int db_query_latest_tier1(db_handle* db, semantic_type type, double* out_val, int64_t* out_ts);
 
-/**
+/*
  * @brief Query values in a time range.
  *
  * @param[in]  db           Database handle.
@@ -145,10 +145,10 @@ int db_query_latest_tier1(db_handle *db, semantic_type type, double *out_val, in
  * @param[out] out_count    Number of results.
  * @return 0 on success (may return 0 results), error code on failure.
  */
-int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int64_t to_ts,
-                         double **out_values, int64_t **out_ts, size_t *out_count);
+int db_query_range_tier1(db_handle* db, semantic_type type, int64_t from_ts, int64_t to_ts,
+                         double** out_values, int64_t** out_ts, size_t* out_count);
 
-/**
+/*
  * @brief Check if a Tier 1 data point already exists.
  *
  * @param db        Database handle.
@@ -156,7 +156,7 @@ int db_query_range_tier1(db_handle *db, semantic_type type, int64_t from_ts, int
  * @param timestamp Unix timestamp.
  * @return 1 if exists, 0 if not, negative error code on failure.
  */
-int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t timestamp);
+int db_query_point_exists_tier1(db_handle* db, semantic_type type, int64_t timestamp);
 
 /* ============================================================================
  * Tier 2: Raw Extension Data
@@ -166,7 +166,7 @@ int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t times
  * Used for plugin-specific data not covered by semantic types.
  */
 
-/**
+/*
  * @brief Insert a Tier 2 raw data point.
  *
  * @param db           Database handle.
@@ -176,10 +176,10 @@ int db_query_point_exists_tier1(db_handle *db, semantic_type type, int64_t times
  * @param source_id    Plugin ID.
  * @return 0 on success, error code on failure.
  */
-int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const char *json_payload,
-                    const char *source_id);
+int db_insert_tier2(db_handle* db, const char* key, int64_t timestamp, const char* json_payload,
+                    const char* source_id);
 
-/**
+/*
  * @brief Query most recent Tier 2 data.
  *
  * @param[in]  db       Database handle.
@@ -188,26 +188,26 @@ int db_insert_tier2(db_handle *db, const char *key, int64_t timestamp, const cha
  * @param[out] out_ts   Output timestamp.
  * @return 0 if found, DB_NOT_FOUND if no data, error code on failure.
  */
-int db_query_latest_tier2(db_handle *db, const char *key, char **out_json, int64_t *out_ts);
+int db_query_latest_tier2(db_handle* db, const char* key, char** out_json, int64_t* out_ts);
 
 /* ============================================================================
  * Memory Management
  * ============================================================================ */
 
-/**
+/*
  * @brief Free memory allocated by database queries.
  *
  * Use this to free arrays returned by query functions.
  *
  * @param ptr Pointer to free (NULL is safe).
  */
-void db_free(void *ptr);
+void db_free(void* ptr);
 
 /* ============================================================================
  * Maintenance
  * ============================================================================ */
 
-/**
+/*
  * @brief Delete data older than specified timestamp.
  *
  * @param db        Database handle.
@@ -215,25 +215,25 @@ void db_free(void *ptr);
  * @param before_ts Delete records before this timestamp.
  * @return Number of records deleted, or negative error code.
  */
-int db_prune_tier1(db_handle *db, semantic_type type, int64_t before_ts);
+int db_prune_tier1(db_handle* db, semantic_type type, int64_t before_ts);
 
-/**
+/*
  * @brief periodic tick for time-based operations (like CSV flushing).
  *
  * @param db Database handle.
  * @return 0 on success.
  */
-int db_tick(db_handle *db);
+int db_tick(db_handle* db);
 
-/**
+/*
  * @brief Set the flush interval for CSV backend.
  *
  * @param db Database handle.
  * @param interval_sec Seconds between flushes.
  */
-void db_set_interval(db_handle *db, int interval_sec);
+void db_set_interval(db_handle* db, int interval_sec);
 
-/**
+/*
  * @brief Check if database is empty (no data points).
  *
  * Used for bootstrap detection on server startup.
@@ -241,8 +241,8 @@ void db_set_interval(db_handle *db, int interval_sec);
  * @param db Database handle.
  * @return 1 if empty, 0 if has data, negative on error.
  */
-int db_is_empty(db_handle *db);
+int db_is_empty(db_handle* db);
 
-int db_maintenance(db_handle *db);
+int db_maintenance(db_handle* db);
 
 #endif /* HEIMWATT_DB_H */

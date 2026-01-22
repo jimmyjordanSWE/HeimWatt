@@ -1,7 +1,7 @@
 #ifndef HEIMWATT_SERVER_H
 #define HEIMWATT_SERVER_H
 
-/**
+/*
  * @file server.h
  * @brief HeimWatt Core Lifecycle API
  *
@@ -33,7 +33,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
-/**
+/*
  * @brief Opaque HeimWatt context.
  *
  * Represents a running HeimWatt instance.
@@ -41,7 +41,7 @@
  */
 typedef struct heimwatt_ctx heimwatt_ctx;
 
-/**
+/*
  * @brief Create a new HeimWatt context.
  *
  * Allocates but does not initialize the context.
@@ -51,9 +51,9 @@ typedef struct heimwatt_ctx heimwatt_ctx;
  *
  * @threadsafe No.
  */
-heimwatt_ctx *heimwatt_create(void);
+heimwatt_ctx* heimwatt_create(void);
 
-/**
+/*
  * @brief Initialize the system.
  *
  * Loads config, connects to DB, starts IPC server.
@@ -64,9 +64,9 @@ heimwatt_ctx *heimwatt_create(void);
  *
  * @threadsafe No.
  */
-int heimwatt_init(heimwatt_ctx *ctx, const char *base_path);
+int heimwatt_init(heimwatt_ctx* ctx, const char* base_path);
 
-/**
+/*
  * @brief Run the main loop.
  *
  * Blocks until shutdown is requested (signal or heimwatt_request_shutdown()).
@@ -76,9 +76,9 @@ int heimwatt_init(heimwatt_ctx *ctx, const char *base_path);
  *
  * @threadsafe No (caller must be main thread).
  */
-void heimwatt_run(heimwatt_ctx *ctx);
+void heimwatt_run(heimwatt_ctx* ctx);
 
-/**
+/*
  * @brief Run the main loop with external shutdown flag.
  *
  * Like heimwatt_run(), but polls an external shutdown flag.
@@ -90,9 +90,9 @@ void heimwatt_run(heimwatt_ctx *ctx);
  *
  * @threadsafe No (caller must be main thread).
  */
-void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomic_t *shutdown_flag);
+void heimwatt_run_with_shutdown_flag(heimwatt_ctx* ctx, const volatile sig_atomic_t* shutdown_flag);
 
-/**
+/*
  * @brief Request graceful shutdown.
  *
  * Signals heimwatt_run() to exit gracefully.
@@ -103,9 +103,9 @@ void heimwatt_run_with_shutdown_flag(heimwatt_ctx *ctx, const volatile sig_atomi
  * @threadsafe Yes.
  * @signalsafe Yes.
  */
-void heimwatt_request_shutdown(heimwatt_ctx *ctx);
+void heimwatt_request_shutdown(heimwatt_ctx* ctx);
 
-/**
+/*
  * @brief Destroy context and free resources.
  *
  * Call after heimwatt_run() returns.
@@ -114,9 +114,9 @@ void heimwatt_request_shutdown(heimwatt_ctx *ctx);
  *
  * @threadsafe No.
  */
-void heimwatt_destroy(heimwatt_ctx **ctx_ptr);
+void heimwatt_destroy(heimwatt_ctx** ctx_ptr);
 
-/**
+/*
  * @brief Check if system is running.
  *
  * @param ctx Context to check.
@@ -124,6 +124,6 @@ void heimwatt_destroy(heimwatt_ctx **ctx_ptr);
  *
  * @threadsafe Yes.
  */
-bool heimwatt_is_running(const heimwatt_ctx *ctx);
+bool heimwatt_is_running(const heimwatt_ctx* ctx);
 
 #endif /* HEIMWATT_SERVER_H */

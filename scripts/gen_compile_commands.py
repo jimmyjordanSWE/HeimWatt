@@ -23,10 +23,10 @@ def generate():
     commands = []
     
     # Find all .c files in src and its subdirectories
-    sources = glob.glob("src/**/*.c", recursive=True)
+    sources = glob.glob("src/*/*.c", recursive=True)
     sources.extend(glob.glob("src/*.c"))
     # Also include plugins
-    sources.extend(glob.glob("plugins/**/*.c", recursive=True))
+    sources.extend(glob.glob("plugins/*/*.c", recursive=True))
     # Dedup
     sources = list(set(sources))
     

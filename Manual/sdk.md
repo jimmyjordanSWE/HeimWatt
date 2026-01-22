@@ -151,7 +151,7 @@ Every plugin requires a `manifest.json`. Here are examples for different use cas
 ```c
 #include <heimwatt_sdk.h>
 
-/**
+/*
  * @brief  Initialize plugin context from command-line arguments.
  * @param  ctx_out Output pointer for plugin context.
  * @param  argc    Argument count from main().
@@ -160,14 +160,14 @@ Every plugin requires a `manifest.json`. Here are examples for different use cas
  */
 int sdk_create(plugin_ctx **ctx_out, int argc, char **argv);
 
-/**
+/*
  * @brief  Run the plugin event loop. Blocks until shutdown.
  * @param  ctx Plugin context.
  * @return 0 on clean shutdown, negative errno on failure.
  */
 int sdk_run(plugin_ctx *ctx);
 
-/**
+/*
  * @brief  Destroy plugin context and release resources.
  * @param  ctx_ptr Pointer to context pointer. Set to NULL after destruction.
  */
@@ -200,7 +200,7 @@ HEIMWATT_PLUGIN_ENTRY(init)
 Push semantic data to Core:
 
 ```c
-/**
+/*
  * @brief  Report a semantic value to Core.
  * @param  ctx       Plugin context.
  * @param  type_name Canonical semantic type (e.g., "atmosphere.temperature").
@@ -210,7 +210,7 @@ Push semantic data to Core:
  */
 int sdk_report_value(plugin_ctx *ctx, const char *type_name, double value, int64_t ts);
 
-/**
+/*
  * @brief  Report a price value with currency.
  * @param  currency  ISO 4217 currency code (e.g., "SEK", "EUR").
  */
@@ -258,7 +258,7 @@ typedef struct {
     char currency[4];
 } sdk_data_point;
 
-/**
+/*
  * @brief  Query the latest value for a semantic type.
  * @param  type Semantic type enum.
  * @param  out  Output data point.
@@ -266,7 +266,7 @@ typedef struct {
  */
 int sdk_query_latest(plugin_ctx *ctx, semantic_type type, sdk_data_point *out);
 
-/**
+/*
  * @brief  Query historical range.
  * @param  out_array  Output array (caller must call sdk_data_point_destroy).
  * @param  out_count  Number of points returned.
@@ -285,7 +285,7 @@ void sdk_data_point_destroy(sdk_data_point **points_ptr);
 Access credentials stored by Core:
 
 ```c
-/**
+/*
  * @brief  Retrieve a credential for this plugin.
  * @param  key       Credential key (e.g., "access_token", "username").
  * @param  value     Output pointer. Caller must call sdk_credential_destroy.
@@ -296,7 +296,7 @@ Access credentials stored by Core:
  */
 int sdk_credential_get(plugin_ctx *ctx, const char *key, char **value);
 
-/**
+/*
  * @brief  Zero and free a credential. MUST be called after use.
  * @param  value Pointer to credential pointer. Set to NULL after destruction.
  */
@@ -331,12 +331,12 @@ Register handlers for periodic execution:
 ```c
 typedef void (*sdk_tick_handler)(plugin_ctx *ctx, int64_t timestamp);
 
-/**
+/*
  * @brief  Register handler for manifest's interval_seconds.
  */
 int sdk_register_ticker(plugin_ctx *ctx, sdk_tick_handler handler);
 
-/**
+/*
  * @brief  Register cron-style schedule.
  * @param  expression Cron expression (e.g., "0 * * * *" = every hour).
  */
@@ -353,7 +353,7 @@ OUT plugins can expose HTTP endpoints:
 ```c
 typedef int (*sdk_api_handler)(plugin_ctx *ctx, const sdk_req *req, sdk_resp *resp);
 
-/**
+/*
  * @brief  Register an HTTP endpoint.
  * @param  method HTTP method ("GET", "POST").
  * @param  path   URL path (e.g., "/calculate").

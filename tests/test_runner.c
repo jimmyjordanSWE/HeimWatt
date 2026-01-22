@@ -1,4 +1,4 @@
-/**
+/*
  * @file test_runner.c
  * @brief Main test runner for all unit tests
  */
@@ -17,18 +17,10 @@ extern void test_duckdb_persistence(void);
 extern void test_duckdb_query_range(void);
 
 static int current_test_group = 0;
-enum
-{
-    GROUP_DEFAULT = 0,
-    GROUP_FILE_BACKEND,
-    GROUP_PLUGIN_MGR,
-    GROUP_DUCKDB_BACKEND
-};
+enum { GROUP_DEFAULT = 0, GROUP_FILE_BACKEND, GROUP_PLUGIN_MGR, GROUP_DUCKDB_BACKEND };
 
-void setUp(void)
-{
-    switch (current_test_group)
-    {
+void setUp(void) {
+    switch (current_test_group) {
         case GROUP_FILE_BACKEND:
             file_backend_setUp();
             break;
@@ -43,10 +35,8 @@ void setUp(void)
     }
 }
 
-void tearDown(void)
-{
-    switch (current_test_group)
-    {
+void tearDown(void) {
+    switch (current_test_group) {
         case GROUP_FILE_BACKEND:
             file_backend_tearDown();
             break;
@@ -158,8 +148,7 @@ extern void test_sdk_eventloop_fd(void);
 extern void test_sdk_eventloop_ticker(void);
 extern void test_sdk_eventloop_remove_fd(void);
 
-int main(void)
-{
+int main(void) {
     UNITY_BEGIN();
 
     // ======== HTTP Parser Tests ========

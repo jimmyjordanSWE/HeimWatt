@@ -1,3 +1,6 @@
+#include "memory.h"
+#include "sdk_eventloop.h"
+
 #include <errno.h>
 #include <poll.h>
 #include <stdatomic.h>
@@ -6,32 +9,26 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "memory.h"
-#include "sdk_eventloop.h"
-
 #define SDK_MAX_FDS 64
 #define SDK_MAX_TICKERS 32
 
-typedef struct
-{
+typedef struct {
     int fd;
     int events;
     sdk_fd_callback cb;
-    void *ctx;
+    void* ctx;
 } eventloop_fd;
 
-typedef struct
-{
+typedef struct {
     int64_t next_run;
     int interval_sec;
     sdk_next_run_fn next_check_fn; /* Optional: if set, overrides interval_sec logic */
     sdk_ticker_callback cb;
-    void *ctx;
+    void* ctx;
     bool active;
 } eventloop_ticker;
 
-struct sdk_eventloop
-{
+struct sdk_eventloop {
     struct pollfd poll_fds[SDK_MAX_FDS];
     eventloop_fd handlers[SDK_MAX_FDS];
     int fd_count;
@@ -42,10 +39,10 @@ struct sdk_eventloop
     atomic_bool running;
 };
 
-sdk_eventloop *sdk_eventloop_create(void)
-{
-    sdk_eventloop *loop = mem_alloc(sizeof(*loop));
-    if (!loop) return NULL;
+sdk_eventloop* sdk_eventloop_create(void) {
+    sdk_eventloop* loop = mem_alloc(sizeof(*loop));
+    if (!loop)
+        return NULL;
 
     loop->fd_count = 0;
     loop->ticker_count = 0;
@@ -54,24 +51,25 @@ sdk_eventloop *sdk_eventloop_create(void)
     return loop;
 }
 
-void sdk_eventloop_destroy(sdk_eventloop **loop_ptr)
-{
-    if (!loop_ptr || !*loop_ptr) return;
+void sdk_eventloop_destroy(sdk_eventloop** loop_ptr) {
+    if (!loop_ptr || !*loop_ptr)
+        return;
     mem_free(*loop_ptr);
     *loop_ptr = NULL;
 }
 
-int sdk_eventloop_add_fd(sdk_eventloop *loop, int fd, int events, sdk_fd_callback cb, void *ctx)
-{
-    if (!loop || fd < 0 || !cb) return -EINVAL;
-    if (loop->fd_count >= SDK_MAX_FDS) return -ENOSPC;
+int sdk_eventloop_add_fd(sdk_eventloop* loop, int fd, int events, sdk_fd_callback cb, void* ctx) {
+    if (!loop || fd < 0 || !cb)
+        return -EINVAL;
+    if (loop->fd_count >= SDK_MAX_FDS)
+        return -ENOSPC;
 
     // Check if duplicate? For now, assume unique or allow multiple handlers for same FD?
     // Epoll supports one per FD. Poll supports duplicates but it's weird.
     // Let's assume unique FD registration for now.
-    for (int i = 0; i < loop->fd_count; i++)
-    {
-        if (loop->handlers[i].fd == fd) return -EEXIST;
+    for (int i = 0; i < loop->fd_count; i++) {
+        if (loop->handlers[i].fd == fd)
+            return -EEXIST;
     }
 
     int idx = loop->fd_count;
@@ -88,18 +86,15 @@ int sdk_eventloop_add_fd(sdk_eventloop *loop, int fd, int events, sdk_fd_callbac
     return 0;
 }
 
-int sdk_eventloop_remove_fd(sdk_eventloop *loop, int fd)
-{
-    if (!loop || fd < 0) return -EINVAL;
+int sdk_eventloop_remove_fd(sdk_eventloop* loop, int fd) {
+    if (!loop || fd < 0)
+        return -EINVAL;
 
-    for (int i = 0; i < loop->fd_count; i++)
-    {
-        if (loop->handlers[i].fd == fd)
-        {
+    for (int i = 0; i < loop->fd_count; i++) {
+        if (loop->handlers[i].fd == fd) {
             // Move last to current
             int last = loop->fd_count - 1;
-            if (i != last)
-            {
+            if (i != last) {
                 loop->poll_fds[i] = loop->poll_fds[last];
                 loop->handlers[i] = loop->handlers[last];
             }
@@ -110,11 +105,12 @@ int sdk_eventloop_remove_fd(sdk_eventloop *loop, int fd)
     return -ENOENT;
 }
 
-int sdk_eventloop_add_ticker(sdk_eventloop *loop, int interval_sec, sdk_ticker_callback cb,
-                             void *ctx)
-{
-    if (!loop || interval_sec <= 0 || !cb) return -EINVAL;
-    if (loop->ticker_count >= SDK_MAX_TICKERS) return -ENOSPC;
+int sdk_eventloop_add_ticker(sdk_eventloop* loop, int interval_sec, sdk_ticker_callback cb,
+                             void* ctx) {
+    if (!loop || interval_sec <= 0 || !cb)
+        return -EINVAL;
+    if (loop->ticker_count >= SDK_MAX_TICKERS)
+        return -ENOSPC;
 
     int idx = loop->ticker_count;
     loop->tickers[idx].interval_sec = interval_sec;
@@ -130,11 +126,12 @@ int sdk_eventloop_add_ticker(sdk_eventloop *loop, int interval_sec, sdk_ticker_c
     return 0;
 }
 
-int sdk_eventloop_add_scheduled_task(sdk_eventloop *loop, sdk_next_run_fn next_run_fn,
-                                     sdk_ticker_callback cb, void *ctx)
-{
-    if (!loop || !next_run_fn || !cb) return -EINVAL;
-    if (loop->ticker_count >= SDK_MAX_TICKERS) return -ENOSPC;
+int sdk_eventloop_add_scheduled_task(sdk_eventloop* loop, sdk_next_run_fn next_run_fn,
+                                     sdk_ticker_callback cb, void* ctx) {
+    if (!loop || !next_run_fn || !cb)
+        return -EINVAL;
+    if (loop->ticker_count >= SDK_MAX_TICKERS)
+        return -ENOSPC;
 
     int idx = loop->ticker_count;
     loop->tickers[idx].interval_sec = 0;
@@ -150,41 +147,37 @@ int sdk_eventloop_add_scheduled_task(sdk_eventloop *loop, sdk_next_run_fn next_r
     return 0;
 }
 
-void sdk_eventloop_stop(sdk_eventloop *loop)
-{
-    if (loop)
-    {
+void sdk_eventloop_stop(sdk_eventloop* loop) {
+    if (loop) {
         atomic_store(&loop->running, false);
     }
 }
 
-int sdk_eventloop_run(sdk_eventloop *loop)
-{
-    if (!loop) return -EINVAL;
+int sdk_eventloop_run(sdk_eventloop* loop) {
+    if (!loop)
+        return -EINVAL;
 
     atomic_store(&loop->running, true);
 
-    while (atomic_load(&loop->running))
-    {
+    while (atomic_load(&loop->running)) {
         // 1. Calculate timeout
         int timeout_ms = -1;
         int64_t now = time(NULL);
         int64_t next_event = -1;
 
-        for (int i = 0; i < loop->ticker_count; i++)
-        {
-            if (!loop->tickers[i].active) continue;
+        for (int i = 0; i < loop->ticker_count; i++) {
+            if (!loop->tickers[i].active)
+                continue;
 
-            if (next_event == -1 || loop->tickers[i].next_run < next_event)
-            {
+            if (next_event == -1 || loop->tickers[i].next_run < next_event) {
                 next_event = loop->tickers[i].next_run;
             }
         }
 
-        if (next_event != -1)
-        {
+        if (next_event != -1) {
             int64_t diff = next_event - now;
-            if (diff < 0) diff = 0;
+            if (diff < 0)
+                diff = 0;
             timeout_ms = (int) diff * 1000;
         }
 
@@ -192,19 +185,16 @@ int sdk_eventloop_run(sdk_eventloop *loop)
         // We use poll_fds array directly
         int n = poll(loop->poll_fds, loop->fd_count, timeout_ms);
 
-        if (n < 0)
-        {
-            if (errno == EINTR) continue;
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
             return -errno;
         }
 
         // 3. Dispatch FDs
-        if (n > 0)
-        {
-            for (int i = 0; i < loop->fd_count; i++)
-            {
-                if (loop->poll_fds[i].revents != 0)
-                {
+        if (n > 0) {
+            for (int i = 0; i < loop->fd_count; i++) {
+                if (loop->poll_fds[i].revents != 0) {
                     loop->handlers[i].cb(loop->handlers[i].ctx, loop->poll_fds[i].fd,
                                          loop->poll_fds[i].revents);
                     // Reset revents handled by next poll call
@@ -214,23 +204,19 @@ int sdk_eventloop_run(sdk_eventloop *loop)
 
         // 4. Dispatch Tickers
         now = time(NULL);
-        for (int i = 0; i < loop->ticker_count; i++)
-        {
-            if (!loop->tickers[i].active) continue;
+        for (int i = 0; i < loop->ticker_count; i++) {
+            if (!loop->tickers[i].active)
+                continue;
 
-            if (now >= loop->tickers[i].next_run)
-            {
+            if (now >= loop->tickers[i].next_run) {
                 // Run
                 loop->tickers[i].cb(loop->tickers[i].ctx, now);
 
                 // Schedule next
-                if (loop->tickers[i].next_check_fn)
-                {
+                if (loop->tickers[i].next_check_fn) {
                     loop->tickers[i].next_run =
                         loop->tickers[i].next_check_fn(loop->tickers[i].ctx, now);
-                }
-                else
-                {
+                } else {
                     // Simple interval
                     loop->tickers[i].next_run = now + loop->tickers[i].interval_sec;
                 }

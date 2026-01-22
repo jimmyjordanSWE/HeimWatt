@@ -1,4 +1,4 @@
-/**
+/*
  * @file pipeline.h
  * @brief Internal data pipeline
  *
@@ -12,7 +12,7 @@
 /* Forward declaration */
 typedef struct heimwatt_ctx heimwatt_ctx;
 
-/**
+/*
  * Main pipeline entry point.
  * Runs the data fetching and planning loop in a separate thread.
  *
@@ -21,9 +21,9 @@ typedef struct heimwatt_ctx heimwatt_ctx;
  *
  * @note Internal use only.
  */
-void *pipeline_thread_func(void *arg);
+void* pipeline_thread_func(void* arg);
 
-/**
+/*
  * Initial data backfill helper.
  * Populates database with historical data if empty.
  *
@@ -31,6 +31,6 @@ void *pipeline_thread_func(void *arg);
  *
  * @note Internal use only.
  */
-void pipeline_backfill(heimwatt_ctx *ctx);
+void pipeline_backfill(heimwatt_ctx* ctx);
 
 #endif /* HEIMWATT_PIPELINE_H */

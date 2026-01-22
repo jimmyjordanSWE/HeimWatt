@@ -57,10 +57,10 @@ Runs on every pull request. All checks must pass before merge.
 
 ```bash
 # Check formatting (fails if unformatted)
-clang-format --dry-run --Werror src/**/*.c src/**/*.h
+clang-format --dry-run --Werror src/*/*.c src/*/*.h
 
 # Static analysis
-clang-tidy src/**/*.c -- -I./include
+clang-tidy src/*/*.c -- -I./include
 ```
 
 ### Stage 2: Build

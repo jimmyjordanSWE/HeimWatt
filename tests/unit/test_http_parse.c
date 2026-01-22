@@ -1,28 +1,30 @@
-/**
+/*
  * @file test_http_parse.c
  * @brief Unit tests for HTTP parser
  */
+
+#include "memory.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "libs/unity/unity.h"
-#include "memory.h"
 #include "net/http_parse.h"
 
 // --- http_parse_request tests ---
 
 static HwArena *test_arena;
 
-static void setup_arena(void) { test_arena = hw_arena_create(4096); }
-
-static void teardown_arena(void)
-{
-    if (test_arena) hw_arena_destroy(&test_arena);
+static void setup_arena(void) {
+    test_arena = hw_arena_create(4096);
 }
 
-void test_http_parse_simple_get(void)
-{
+static void teardown_arena(void) {
+    if (test_arena)
+        hw_arena_destroy(&test_arena);
+}
+
+void test_http_parse_simple_get(void) {
     setup_arena();
     http_request req;
     const char *raw = "GET /api/status HTTP/1.1\r\n\r\n";
@@ -36,8 +38,7 @@ void test_http_parse_simple_get(void)
     teardown_arena();
 }
 
-void test_http_parse_get_with_query(void)
-{
+void test_http_parse_get_with_query(void) {
     setup_arena();
     http_request req;
     const char *raw = "GET /api?foo=bar&baz=1 HTTP/1.1\r\n\r\n";
@@ -51,8 +52,7 @@ void test_http_parse_get_with_query(void)
     teardown_arena();
 }
 
-void test_http_parse_with_headers(void)
-{
+void test_http_parse_with_headers(void) {
     setup_arena();
     http_request req;
     const char *raw =
@@ -70,8 +70,7 @@ void test_http_parse_with_headers(void)
     teardown_arena();
 }
 
-void test_http_parse_post_method(void)
-{
+void test_http_parse_post_method(void) {
     setup_arena();
     http_request req;
     const char *raw = "POST /data HTTP/1.1\r\n\r\n";
@@ -84,8 +83,7 @@ void test_http_parse_post_method(void)
     teardown_arena();
 }
 
-void test_http_parse_malformed_no_crlf(void)
-{
+void test_http_parse_malformed_no_crlf(void) {
     setup_arena();
     http_request req;
     const char *raw = "GARBAGE";
@@ -95,8 +93,7 @@ void test_http_parse_malformed_no_crlf(void)
     teardown_arena();
 }
 
-void test_http_parse_null_input(void)
-{
+void test_http_parse_null_input(void) {
     setup_arena();
     http_request req;
     int ret = http_parse_request(NULL, 0, &req, test_arena);
@@ -109,8 +106,7 @@ void test_http_parse_null_input(void)
 
 // --- http_serialize_response tests ---
 
-void test_http_serialize_response_basic(void)
-{
+void test_http_serialize_response_basic(void) {
     http_response resp;
     http_response_init(&resp);
     http_response_set_status(&resp, 200);

@@ -1,4 +1,4 @@
-/**
+/*
  * @file test_json.c
  * @brief Unit tests for JSON wrapper functions
  */
@@ -11,8 +11,7 @@
 
 // --- json_parse tests ---
 
-void test_json_parse_object(void)
-{
+void test_json_parse_object(void) {
     json_value *v = json_parse("{\"key\":\"value\"}");
     TEST_ASSERT_NOT_NULL(v);
     TEST_ASSERT_TRUE(json_is_object(v));
@@ -24,8 +23,7 @@ void test_json_parse_object(void)
     json_free(v);
 }
 
-void test_json_parse_array(void)
-{
+void test_json_parse_array(void) {
     json_value *v = json_parse("[1, 2, 3]");
     TEST_ASSERT_NOT_NULL(v);
     TEST_ASSERT_TRUE(json_is_array(v));
@@ -38,8 +36,7 @@ void test_json_parse_array(void)
     json_free(v);
 }
 
-void test_json_parse_nested(void)
-{
+void test_json_parse_nested(void) {
     json_value *v = json_parse("{\"outer\":{\"inner\":42}}");
     TEST_ASSERT_NOT_NULL(v);
 
@@ -54,8 +51,7 @@ void test_json_parse_nested(void)
     json_free(v);
 }
 
-void test_json_parse_invalid(void)
-{
+void test_json_parse_invalid(void) {
     json_value *v = json_parse("{broken");
     TEST_ASSERT_NULL(v);
 
@@ -65,8 +61,7 @@ void test_json_parse_invalid(void)
 
 // --- json_stringify tests ---
 
-void test_json_stringify_roundtrip(void)
-{
+void test_json_stringify_roundtrip(void) {
     json_value *obj = json_object_new();
     json_object_set_string(obj, "name", "test");
     json_object_set_number(obj, "count", 42);
@@ -87,8 +82,7 @@ void test_json_stringify_roundtrip(void)
     json_free(parsed);
 }
 
-void test_json_type_checks(void)
-{
+void test_json_type_checks(void) {
     json_value *str = json_string_new("hello");
     json_value *num = json_number_new(3.14);
     json_value *arr = json_array_new();

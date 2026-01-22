@@ -1,4 +1,4 @@
-/**
+/*
  * @file test_lps.c
  * @brief Unit tests for LPS (Linear Programming Solver) - Unity version
  *
@@ -20,8 +20,7 @@
  * Lifecycle Tests
  * ======================================================================== */
 
-void test_lps_solver_create_destroy(void)
-{
+void test_lps_solver_create_destroy(void) {
     lps_solver *solver = lps_solver_create();
     TEST_ASSERT_NOT_NULL(solver);
 
@@ -32,8 +31,7 @@ void test_lps_solver_create_destroy(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_solution_create_destroy(void)
-{
+void test_lps_solution_create_destroy(void) {
     lps_solution *solution = lps_solution_create(48);
     TEST_ASSERT_NOT_NULL(solution);
     TEST_ASSERT_EQUAL_size_t(48, solution->num_periods);
@@ -51,8 +49,7 @@ void test_lps_solution_create_destroy(void)
     lps_solution_destroy(&solution);
 }
 
-void test_lps_solution_create_invalid(void)
-{
+void test_lps_solution_create_invalid(void) {
     // Zero periods
     lps_solution *solution = lps_solution_create(0);
     TEST_ASSERT_NULL(solution);
@@ -66,14 +63,12 @@ void test_lps_solution_create_invalid(void)
  * Validation Tests
  * ======================================================================== */
 
-void test_lps_validate_null_problem(void)
-{
+void test_lps_validate_null_problem(void) {
     int ret = lps_problem_validate(NULL);
     TEST_ASSERT_EQUAL_INT(-EINVAL, ret);
 }
 
-void test_lps_validate_null_arrays(void)
-{
+void test_lps_validate_null_arrays(void) {
     lps_problem problem = {.num_periods = 24,
                            .solar_forecast_kwh = NULL,
                            .price_sek_kwh = NULL,
@@ -89,8 +84,7 @@ void test_lps_validate_null_arrays(void)
     TEST_ASSERT_EQUAL_INT(-EINVAL, ret);
 }
 
-void test_lps_validate_invalid_battery(void)
-{
+void test_lps_validate_invalid_battery(void) {
     float solar[24] = {0};
     float price[24] = {1.0f};
     float demand[24] = {1.0f};
@@ -110,8 +104,7 @@ void test_lps_validate_invalid_battery(void)
     TEST_ASSERT_EQUAL_INT(-ERANGE, ret);
 }
 
-void test_lps_validate_invalid_efficiency(void)
-{
+void test_lps_validate_invalid_efficiency(void) {
     float solar[24] = {0};
     float price[24] = {1.0f};
     float demand[24] = {1.0f};
@@ -131,8 +124,7 @@ void test_lps_validate_invalid_efficiency(void)
     TEST_ASSERT_EQUAL_INT(-ERANGE, ret);
 }
 
-void test_lps_validate_valid_problem(void)
-{
+void test_lps_validate_valid_problem(void) {
     float solar[24] = {0};
     float price[24] = {1.0f};
     float demand[24] = {1.0f};
@@ -156,8 +148,7 @@ void test_lps_validate_valid_problem(void)
  * Correctness Tests
  * ======================================================================== */
 
-void test_lps_no_battery_case(void)
-{
+void test_lps_no_battery_case(void) {
     const size_t T = 4;
     float solar[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float price[4] = {1.0f, 2.0f, 1.5f, 1.0f};
@@ -181,8 +172,7 @@ void test_lps_no_battery_case(void)
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     // Should buy exactly demand each period
-    for (size_t t = 0; t < T; t++)
-    {
+    for (size_t t = 0; t < T; t++) {
         TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, demand[t], solution->buy_kwh[t]);
         TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, solution->sell_kwh[t]);
         TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, solution->charge_kwh[t]);
@@ -196,8 +186,7 @@ void test_lps_no_battery_case(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_constant_price_with_solar(void)
-{
+void test_lps_constant_price_with_solar(void) {
     const size_t T = 4;
     float solar[4] = {2.0f, 4.0f, 3.0f, 1.0f};
     float price[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -221,8 +210,7 @@ void test_lps_constant_price_with_solar(void)
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     // Should use all solar and buy remainder
-    for (size_t t = 0; t < T; t++)
-    {
+    for (size_t t = 0; t < T; t++) {
         TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, solar[t], solution->solar_direct_kwh[t]);
         TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, demand[t] - solar[t], solution->buy_kwh[t]);
     }
@@ -234,8 +222,7 @@ void test_lps_constant_price_with_solar(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_price_arbitrage(void)
-{
+void test_lps_price_arbitrage(void) {
     const size_t T = 2;
     float solar[2] = {0.0f, 0.0f};
     float price[2] = {1.0f, 3.0f};  // Cheap then expensive
@@ -269,8 +256,7 @@ void test_lps_price_arbitrage(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_excess_solar_sell(void)
-{
+void test_lps_excess_solar_sell(void) {
     const size_t T = 2;
     float solar[2] = {10.0f, 10.0f};  // Excess solar
     float price[2] = {2.0f, 2.0f};
@@ -294,8 +280,7 @@ void test_lps_excess_solar_sell(void)
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     // No grid purchase needed
-    for (size_t t = 0; t < T; t++)
-    {
+    for (size_t t = 0; t < T; t++) {
         TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, solution->buy_kwh[t]);
         TEST_ASSERT_TRUE(solution->solar_direct_kwh[t] >= demand[t] - 0.1f);
     }
@@ -311,8 +296,7 @@ void test_lps_excess_solar_sell(void)
  * Edge Case Tests
  * ======================================================================== */
 
-void test_lps_single_period(void)
-{
+void test_lps_single_period(void) {
     const size_t T = 1;
     float solar[1] = {2.0f};
     float price[1] = {1.5f};
@@ -342,8 +326,7 @@ void test_lps_single_period(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_full_battery_start(void)
-{
+void test_lps_full_battery_start(void) {
     const size_t T = 4;
     float solar[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float price[4] = {1.0f, 2.0f, 3.0f, 1.0f};
@@ -376,8 +359,7 @@ void test_lps_full_battery_start(void)
     lps_solver_destroy(&solver);
 }
 
-void test_lps_storm_mode(void)
-{
+void test_lps_storm_mode(void) {
     lps_solver *solver = lps_solver_create();
     const size_t T = 2;
     float solar[] = {0.0f, 0.0f};
@@ -413,14 +395,12 @@ void test_lps_storm_mode(void)
  * Performance Test
  * ======================================================================== */
 
-void test_lps_performance_48h(void)
-{
+void test_lps_performance_48h(void) {
     const size_t T = 48;
     float solar[48], price[48], demand[48];
 
     // Generate realistic data
-    for (size_t t = 0; t < T; t++)
-    {
+    for (size_t t = 0; t < T; t++) {
         solar[t] = (t >= 6 && t <= 18) ? 3.0f : 0.0f;
         price[t] = 1.0f + 0.5f * sinf((float) t * 3.14159f / 12.0f);
         demand[t] = 2.0f;

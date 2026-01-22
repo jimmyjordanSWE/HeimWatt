@@ -1,9 +1,14 @@
-/**
+/*
  * @file csv_backend.c
  * @brief CSV storage backend implementation
  *
  * "Wide" CSV format: Timestamp + One column per semantic type
  */
+
+#include "db_backend.h"
+#include "log.h"
+#include "memory.h"
+#include "semantic_types.h"
 
 #include <errno.h>
 #include <math.h>
@@ -15,18 +20,12 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "db_backend.h"
-#include "log.h"
-#include "memory.h"
-#include "semantic_types.h"
-
 /* ============================================================================
  * Internal Context
  * ============================================================================ */
 
-typedef struct csv_ctx
-{
-    FILE *fp;
+typedef struct csv_ctx {
+    FILE* fp;
     char path[256];
 
     /* In-memory buffer of latest known values (Tier 1) */
@@ -42,20 +41,17 @@ typedef struct csv_ctx
  * Helpers
  * ============================================================================ */
 
-static time_t parse_iso(const char *s)
-{
+static time_t parse_iso(const char* s) {
     struct tm tm = {0};
     tm.tm_isdst = -1;
     strptime(s, "%Y-%m-%dT%H:%M:%S", &tm);
     return mktime(&tm);
 }
 
-static void write_header(FILE *fp)
-{
+static void write_header(FILE* fp) {
     fprintf(fp, "timestamp");
-    for (int i = 1; i < SEM_TYPE_COUNT; i++)
-    {
-        const semantic_meta *meta = semantic_get_meta((semantic_type) i);
+    for (int i = 1; i < SEM_TYPE_COUNT; i++) {
+        const semantic_meta* meta = semantic_get_meta((semantic_type) i);
         if (meta)
             fprintf(fp, ",%s", meta->id);
         else
@@ -65,8 +61,7 @@ static void write_header(FILE *fp)
     fflush(fp);
 }
 
-static void flush_row(csv_ctx *ctx, time_t now)
-{
+static void flush_row(csv_ctx* ctx, time_t now) {
     char time_buf[32];
     struct tm tm_info;
     localtime_r(&now, &tm_info);
@@ -74,10 +69,10 @@ static void flush_row(csv_ctx *ctx, time_t now)
 
     fprintf(ctx->fp, "%s", time_buf);
 
-    for (int i = 1; i < SEM_TYPE_COUNT; i++)
-    {
+    for (int i = 1; i < SEM_TYPE_COUNT; i++) {
         fprintf(ctx->fp, ",");
-        if (ctx->has_value[i]) fprintf(ctx->fp, "%.6g", ctx->values[i]);
+        if (ctx->has_value[i])
+            fprintf(ctx->fp, "%.6g", ctx->values[i]);
     }
     fprintf(ctx->fp, "\n");
     fflush(ctx->fp);
@@ -87,22 +82,21 @@ static void flush_row(csv_ctx *ctx, time_t now)
  * Backend Ops Implementation
  * ============================================================================ */
 
-static int csv_open(void **ctx_out, const char *path)
-{
-    if (!path) return -EINVAL;
+static int csv_open(void** ctx_out, const char* path) {
+    if (!path)
+        return -EINVAL;
 
-    csv_ctx *ctx = mem_alloc(sizeof(*ctx));
-    if (!ctx) return -ENOMEM;
+    csv_ctx* ctx = mem_alloc(sizeof(*ctx));
+    if (!ctx)
+        return -ENOMEM;
 
     snprintf(ctx->path, sizeof(ctx->path), "%s/history.csv", path);
 
     /* Create directory recursively (mkdir -p behavior) */
     char tmp[256];
     snprintf(tmp, sizeof(tmp), "%s", path);
-    for (char *p = tmp + 1; *p; p++)
-    {
-        if (*p == '/')
-        {
+    for (char* p = tmp + 1; *p; p++) {
+        if (*p == '/') {
             *p = '\0';
             mkdir(tmp, 0755);
             *p = '/';
@@ -113,40 +107,33 @@ static int csv_open(void **ctx_out, const char *path)
     bool needs_header = (access(ctx->path, F_OK) != 0);
 
     ctx->fp = fopen(ctx->path, "a+");
-    if (!ctx->fp)
-    {
+    if (!ctx->fp) {
         mem_free(ctx);
         return -errno;
     }
 
-    if (needs_header)
-    {
+    if (needs_header) {
         write_header(ctx->fp);
-    }
-    else
-    {
+    } else {
         /* Replay existing data to populate in-memory state */
         fseek(ctx->fp, 0, SEEK_SET);
         char line[4096];
         if (fgets(line, sizeof(line), ctx->fp)) /* Skip header */
         {
-            while (fgets(line, sizeof(line), ctx->fp))
-            {
+            while (fgets(line, sizeof(line), ctx->fp)) {
                 line[strcspn(line, "\r\n")] = 0;
-                char *ptr = line;
-                char *token = strsep(&ptr, ",");
-                if (!token) continue;
+                char* ptr = line;
+                char* token = strsep(&ptr, ",");
+                if (!token)
+                    continue;
                 time_t row_ts = parse_iso(token);
 
-                for (int i = 1; i < SEM_TYPE_COUNT; i++)
-                {
+                for (int i = 1; i < SEM_TYPE_COUNT; i++) {
                     token = strsep(&ptr, ",");
-                    if (token && *token != '\0')
-                    {
-                        char *endptr = NULL;
+                    if (token && *token != '\0') {
+                        char* endptr = NULL;
                         double val = strtod(token, &endptr);
-                        if (endptr != token)
-                        {
+                        if (endptr != token) {
                             ctx->values[i] = val;
                             ctx->has_value[i] = true;
                             ctx->last_ts[i] = (int64_t) row_ts;
@@ -164,21 +151,21 @@ static int csv_open(void **ctx_out, const char *path)
     return 0;
 }
 
-static void csv_close(void **ctx_ptr)
-{
-    if (!ctx_ptr || !*ctx_ptr) return;
+static void csv_close(void** ctx_ptr) {
+    if (!ctx_ptr || !*ctx_ptr)
+        return;
 
-    csv_ctx *ctx = *ctx_ptr;
-    if (ctx->fp)
-    {
+    csv_ctx* ctx = *ctx_ptr;
+    if (ctx->fp) {
         /* Flush before close to ensure persistence */
         time_t flush_ts = time(NULL);
         int64_t max_ts = 0;
-        for (int i = 1; i < SEM_TYPE_COUNT; i++)
-        {
-            if (ctx->has_value[i] && ctx->last_ts[i] > max_ts) max_ts = ctx->last_ts[i];
+        for (int i = 1; i < SEM_TYPE_COUNT; i++) {
+            if (ctx->has_value[i] && ctx->last_ts[i] > max_ts)
+                max_ts = ctx->last_ts[i];
         }
-        if (max_ts > 0) flush_ts = (time_t) max_ts;
+        if (max_ts > 0)
+            flush_ts = (time_t) max_ts;
 
         flush_row(ctx, flush_ts);
         fclose(ctx->fp);
@@ -187,15 +174,16 @@ static void csv_close(void **ctx_ptr)
     *ctx_ptr = NULL;
 }
 
-static int csv_insert_tier1(void *ctx_ptr, semantic_type type, int64_t timestamp, double value,
-                            const char *currency, const char *source_id)
-{
+static int csv_insert_tier1(void* ctx_ptr, semantic_type type, int64_t timestamp, double value,
+                            const char* currency, const char* source_id) {
     (void) currency;
     (void) source_id;
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx || type <= SEM_UNKNOWN || type >= SEM_TYPE_COUNT) return -EINVAL;
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx || type <= SEM_UNKNOWN || type >= SEM_TYPE_COUNT)
+        return -EINVAL;
 
-    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp) return -EEXIST;
+    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp)
+        return -EEXIST;
 
     ctx->values[type] = value;
     ctx->has_value[type] = true;
@@ -203,13 +191,12 @@ static int csv_insert_tier1(void *ctx_ptr, semantic_type type, int64_t timestamp
     return 0;
 }
 
-static int csv_query_latest_tier1(void *ctx_ptr, semantic_type type, double *out_val,
-                                  int64_t *out_ts)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx || type >= SEM_TYPE_COUNT) return -EINVAL;
-    if (ctx->has_value[type])
-    {
+static int csv_query_latest_tier1(void* ctx_ptr, semantic_type type, double* out_val,
+                                  int64_t* out_ts) {
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx || type >= SEM_TYPE_COUNT)
+        return -EINVAL;
+    if (ctx->has_value[type]) {
         *out_val = ctx->values[type];
         *out_ts = ctx->last_ts[type];
         return 0;
@@ -217,33 +204,34 @@ static int csv_query_latest_tier1(void *ctx_ptr, semantic_type type, double *out
     return -2; /* Not found */
 }
 
-static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from_ts, int64_t to_ts,
-                                 double **out_values, int64_t **out_ts, size_t *out_count)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx || !ctx->fp || !out_values || !out_ts || !out_count) return -EINVAL;
+static int csv_query_range_tier1(void* ctx_ptr, semantic_type type, int64_t from_ts, int64_t to_ts,
+                                 double** out_values, int64_t** out_ts, size_t* out_count) {
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx || !ctx->fp || !out_values || !out_ts || !out_count)
+        return -EINVAL;
 
     fseek(ctx->fp, 0, SEEK_SET);
     char line[4096];
-    if (!fgets(line, sizeof(line), ctx->fp)) return -1;
+    if (!fgets(line, sizeof(line), ctx->fp))
+        return -1;
 
     int col_idx = -1;
     int current_col = 0;
-    char *header_dup = mem_alloc(strlen(line) + 1);
-    if (header_dup) strcpy(header_dup, line);
-    char *token = strtok(header_dup, ",\n");
+    char* header_dup = mem_alloc(strlen(line) + 1);
+    if (header_dup) {
+        size_t hlen = strlen(line);
+        memcpy(header_dup, line, hlen + 1);
+    }
+    char* token = strtok(header_dup, ",\n");
 
-    const semantic_meta *meta = semantic_get_meta(type);
-    if (!meta)
-    {
+    const semantic_meta* meta = semantic_get_meta(type);
+    if (!meta) {
         mem_free(header_dup);
         return -EINVAL;
     }
 
-    while (token)
-    {
-        if (strcmp(token, meta->id) == 0)
-        {
+    while (token) {
+        if (strcmp(token, meta->id) == 0) {
             col_idx = current_col;
             break;
         }
@@ -252,8 +240,7 @@ static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from
     }
     mem_free(header_dup);
 
-    if (col_idx == -1)
-    {
+    if (col_idx == -1) {
         *out_count = 0;
         *out_values = NULL;
         *out_ts = NULL;
@@ -262,32 +249,28 @@ static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from
 
     size_t cap = 256;
     size_t count = 0;
-    double *vals = mem_alloc(cap * sizeof(*vals));
-    int64_t *tss = mem_alloc(cap * sizeof(*tss));
-    if (!vals || !tss)
-    {
+    double* vals = mem_alloc(cap * sizeof(*vals));
+    int64_t* tss = mem_alloc(cap * sizeof(*tss));
+    if (!vals || !tss) {
         mem_free(vals);
         mem_free(tss);
         return -ENOMEM;
     }
 
-    while (fgets(line, sizeof(line), ctx->fp))
-    {
-        char *ptr = line;
-        char *comma = strchr(ptr, ',');
-        if (!comma) continue;
+    while (fgets(line, sizeof(line), ctx->fp)) {
+        char* ptr = line;
+        char* comma = strchr(ptr, ',');
+        if (!comma)
+            continue;
         *comma = '\0';
 
         time_t row_ts = parse_iso(ptr);
-        if (row_ts >= from_ts && row_ts <= to_ts)
-        {
-            char *row_cursor = comma + 1;
+        if (row_ts >= from_ts && row_ts <= to_ts) {
+            char* row_cursor = comma + 1;
             int c = 1;
-            while (c < col_idx)
-            {
-                char *next_comma = strchr(row_cursor, ',');
-                if (!next_comma)
-                {
+            while (c < col_idx) {
+                char* next_comma = strchr(row_cursor, ',');
+                if (!next_comma) {
                     row_cursor = NULL;
                     break;
                 }
@@ -295,36 +278,31 @@ static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from
                 c++;
             }
 
-            if (row_cursor)
-            {
-                char *val_end = strchr(row_cursor, ',');
+            if (row_cursor) {
+                char* val_end = strchr(row_cursor, ',');
                 if (val_end)
                     *val_end = '\0';
-                else
-                {
+                else {
                     val_end = strchr(row_cursor, '\n');
-                    if (val_end) *val_end = '\0';
+                    if (val_end)
+                        *val_end = '\0';
                 }
 
-                if (*row_cursor != '\0')
-                {
+                if (*row_cursor != '\0') {
                     double v = strtod(row_cursor, NULL);
-                    if (count >= cap)
-                    {
+                    if (count >= cap) {
                         cap *= 2;
 
-                        double *new_vals = mem_realloc(vals, cap * sizeof(double));
-                        if (!new_vals)
-                        {
+                        double* new_vals = mem_realloc(vals, cap * sizeof(double));
+                        if (!new_vals) {
                             mem_free(vals);
                             mem_free(tss);
                             return -ENOMEM;
                         }
                         vals = new_vals;
 
-                        int64_t *new_tss = mem_realloc(tss, cap * sizeof(int64_t));
-                        if (!new_tss)
-                        {
+                        int64_t* new_tss = mem_realloc(tss, cap * sizeof(int64_t));
+                        if (!new_tss) {
                             mem_free(vals);
                             mem_free(tss);
                             return -ENOMEM;
@@ -344,17 +322,17 @@ static int csv_query_range_tier1(void *ctx_ptr, semantic_type type, int64_t from
     return 0;
 }
 
-static int csv_query_point_exists_tier1(void *ctx_ptr, semantic_type type, int64_t timestamp)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx) return -EINVAL;
-    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp) return 1;
+static int csv_query_point_exists_tier1(void* ctx_ptr, semantic_type type, int64_t timestamp) {
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx)
+        return -EINVAL;
+    if (ctx->has_value[type] && ctx->last_ts[type] == timestamp)
+        return 1;
     return 0;
 }
 
-static int csv_insert_tier2(void *ctx_ptr, const char *key, int64_t timestamp,
-                            const char *json_payload, const char *source_id)
-{
+static int csv_insert_tier2(void* ctx_ptr, const char* key, int64_t timestamp,
+                            const char* json_payload, const char* source_id) {
     (void) ctx_ptr;
     (void) key;
     (void) timestamp;
@@ -363,8 +341,8 @@ static int csv_insert_tier2(void *ctx_ptr, const char *key, int64_t timestamp,
     return 0; /* Tier 2 not implemented for CSV */
 }
 
-static int csv_query_latest_tier2(void *ctx_ptr, const char *key, char **out_json, int64_t *out_ts)
-{
+static int csv_query_latest_tier2(void* ctx_ptr, const char* key, char** out_json,
+                                  int64_t* out_ts) {
     (void) ctx_ptr;
     (void) key;
     (void) out_json;
@@ -372,37 +350,36 @@ static int csv_query_latest_tier2(void *ctx_ptr, const char *key, char **out_jso
     return -1; /* Tier 2 not implemented for CSV */
 }
 
-static int csv_tick(void *ctx_ptr)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx) return -EINVAL;
+static int csv_tick(void* ctx_ptr) {
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx)
+        return -EINVAL;
     time_t now = time(NULL);
-    if (now - ctx->last_flush >= ctx->interval_sec)
-    {
+    if (now - ctx->last_flush >= ctx->interval_sec) {
         flush_row(ctx, now);
         ctx->last_flush = now;
     }
     return 0;
 }
 
-static void csv_set_interval(void *ctx_ptr, int interval_sec)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (ctx && interval_sec > 0) ctx->interval_sec = interval_sec;
+static void csv_set_interval(void* ctx_ptr, int interval_sec) {
+    csv_ctx* ctx = ctx_ptr;
+    if (ctx && interval_sec > 0)
+        ctx->interval_sec = interval_sec;
 }
 
-static int csv_is_empty(void *ctx_ptr)
-{
-    csv_ctx *ctx = ctx_ptr;
-    if (!ctx || !ctx->fp) return 1;
+static int csv_is_empty(void* ctx_ptr) {
+    csv_ctx* ctx = ctx_ptr;
+    if (!ctx || !ctx->fp)
+        return 1;
 
-    FILE *fp = fopen(ctx->path, "r");
-    if (!fp) return 1;
+    FILE* fp = fopen(ctx->path, "r");
+    if (!fp)
+        return 1;
 
     char line[8192];
     /* Skip header */
-    if (!fgets(line, sizeof(line), fp))
-    {
+    if (!fgets(line, sizeof(line), fp)) {
         fclose(fp);
         return 1;
     }
@@ -434,4 +411,6 @@ static const db_backend_ops CSV_OPS = {
     .maintenance = NULL, /* Not implemented */
 };
 
-const db_backend_ops *csv_backend_get_ops(void) { return &CSV_OPS; }
+const db_backend_ops* csv_backend_get_ops(void) {
+    return &CSV_OPS;
+}

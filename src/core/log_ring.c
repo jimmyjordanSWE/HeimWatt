@@ -8,9 +8,8 @@
 #include "libs/cJSON.h"
 
 // Internal State
-static struct
-{
-    log_entry *buffer;
+static struct {
+    log_entry* buffer;
     size_t capacity;
     size_t head;  // Points to the next write position
     size_t count;
@@ -18,12 +17,13 @@ static struct
     int initialized;
 } ring = {0};
 
-void log_ring_init(size_t capacity)
-{
-    if (ring.initialized) return;
+void log_ring_init(size_t capacity) {
+    if (ring.initialized)
+        return;
 
     ring.buffer = calloc(capacity, sizeof(log_entry));
-    if (!ring.buffer) return;  // Should handle OOM better in real/embedded, but std here
+    if (!ring.buffer)
+        return;  // Should handle OOM better in real/embedded, but std here
 
     ring.capacity = capacity;
     ring.head = 0;
@@ -32,9 +32,9 @@ void log_ring_init(size_t capacity)
     ring.initialized = 1;
 }
 
-void log_ring_push(const log_entry *entry)
-{
-    if (!ring.initialized || !entry) return;
+void log_ring_push(const log_entry* entry) {
+    if (!ring.initialized || !entry)
+        return;
 
     pthread_mutex_lock(&ring.lock);
 
@@ -46,17 +46,16 @@ void log_ring_push(const log_entry *entry)
     ring.head = (ring.head + 1) % ring.capacity;
 
     // Update count
-    if (ring.count < ring.capacity)
-    {
+    if (ring.count < ring.capacity) {
         ring.count++;
     }
 
     pthread_mutex_unlock(&ring.lock);
 }
 
-size_t log_ring_get_recent(log_entry *out, size_t max_count)
-{
-    if (!ring.initialized || !out || max_count == 0) return 0;
+size_t log_ring_get_recent(log_entry* out, size_t max_count) {
+    if (!ring.initialized || !out || max_count == 0)
+        return 0;
 
     pthread_mutex_lock(&ring.lock);
 
@@ -72,14 +71,12 @@ size_t log_ring_get_recent(log_entry *out, size_t max_count)
     size_t start_idx = (ring.head + ring.capacity - ring.count) % ring.capacity;
 
     // If we request fewer than available, skip the very oldest
-    if (max_count < ring.count)
-    {
+    if (max_count < ring.count) {
         size_t skip = ring.count - max_count;
         start_idx = (start_idx + skip) % ring.capacity;
     }
 
-    for (size_t i = 0; i < count_to_copy; i++)
-    {
+    for (size_t i = 0; i < count_to_copy; i++) {
         size_t idx = (start_idx + i) % ring.capacity;
         out[i] = ring.buffer[idx];
         copied++;
@@ -89,9 +86,9 @@ size_t log_ring_get_recent(log_entry *out, size_t max_count)
     return copied;
 }
 
-char *log_ring_to_json(size_t max_count)
-{
-    if (!ring.initialized) return NULL;
+char* log_ring_to_json(size_t max_count) {
+    if (!ring.initialized)
+        return NULL;
 
     // Allocate temp buffer on stack for retrieval to avoid holding lock during JSON gen
     // But max_count could be large.
@@ -99,27 +96,28 @@ char *log_ring_to_json(size_t max_count)
     // Let's assume max_count <= 100 which is reasonable for WebUI.
     // If large, malloc.
 
-    log_entry *entries = malloc(sizeof(log_entry) * max_count);
-    if (!entries) return NULL;
+    log_entry* entries = malloc(sizeof(log_entry) * max_count);
+    if (!entries)
+        return NULL;
 
     size_t count = log_ring_get_recent(entries, max_count);
 
-    cJSON *root = cJSON_CreateObject();
-    cJSON *arr = cJSON_CreateArray();
+    cJSON* root = cJSON_CreateObject();
+    cJSON* arr = cJSON_CreateArray();
     cJSON_AddItemToObject(root, "logs", arr);
 
     // Mapping for levels
-    const char *level_names[] = {"trace", "debug", "info", "warn", "error", "fatal"};
+    const char* level_names[] = {"trace", "debug", "info", "warn", "error", "fatal"};
 
-    for (size_t i = 0; i < count; i++)
-    {
-        log_entry *e = &entries[i];
-        cJSON *item = cJSON_CreateObject();
+    for (size_t i = 0; i < count; i++) {
+        log_entry* e = &entries[i];
+        cJSON* item = cJSON_CreateObject();
 
         cJSON_AddNumberToObject(item, "timestamp", (double) e->timestamp);
 
-        const char *lvl = "info";
-        if (e->level >= 0 && e->level < 6) lvl = level_names[e->level];
+        const char* lvl = "info";
+        if (e->level >= 0 && e->level < 6)
+            lvl = level_names[e->level];
         cJSON_AddStringToObject(item, "level", lvl);
 
         cJSON_AddStringToObject(item, "category", e->category);
@@ -131,7 +129,7 @@ char *log_ring_to_json(size_t max_count)
 
     free(entries);
 
-    char *json_str = cJSON_PrintUnformatted(root);
+    char* json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
     return json_str;
