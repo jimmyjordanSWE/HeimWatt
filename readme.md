@@ -2,7 +2,7 @@
 
 > **Vision**: An extensible, local-first data platform for energy optimization.
 
-HeimWatt is a high-performance, modular broker that optimizes home energy usage by intelligenty scheduling flexible loads (heat pumps, EVs, batteries) based on dynamic electricity prices and house physics.
+> **Current state**: WIP
 
 ## Documentation
 
